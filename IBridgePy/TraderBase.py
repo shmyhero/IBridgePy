@@ -6,6 +6,7 @@ import BasicPyLib.simpleLogger as simpleLogger
 from IBridgePy.quantopian import DataClass, ContextClass,QDataClass
 from IBridgePy.IBAccountManager import IBAccountManager
 from IBridgePy.quantopian import calendars,time_rules
+from BasicPyLib.handle_calendar import nth_trading_day_of_month,nth_trading_day_of_week
 
 
 class Trader(IBAccountManager):
@@ -34,7 +35,7 @@ class Trader(IBAccountManager):
         maxSaveTime: max timeframe to be saved in price_size_last_matrix for TickTrader
 
         """ 
-        self.versionNumber = 1.20170913
+        self.versionNumber = 1.20170920
         self.accountCode=accountCode
         self.context = ContextClass(accountCode) 
         self.qData=None          
@@ -46,7 +47,10 @@ class Trader(IBAccountManager):
         self.repeat=repeat
         
         self.initialize_quantopian=initialize_quantopian
-        self.handle_data_quantopian=handle_data_quantopian
+        if not handle_data_quantopian:
+            self.handle_data_quantopian = (lambda x, y: None)
+        else:
+            self.handle_data_quantopian=handle_data_quantopian
         self.before_trading_start_quantopian=before_trading_start_quantopian
         
         # a flag to decide if display_all() should work
@@ -160,47 +164,47 @@ class Trader(IBAccountManager):
         if self.before_trading_start_quantopian!=None:
             self.schedule_function(func=self.before_trading_start_quantopian, 
                                    time_rule=time_rules.market_open(minutes=-10),
-                                   calendar=calendars.US_EQUITIES)     
-        self.stime_previous=dt.datetime.now() 
+                                   calendar=calendars.US_EQUITIES) 
+        tmp = self.get_datetime()
+        self.check_date_rules(tmp)
+        self.stime_previous = tmp 
         
     def event_Function(self):
         self.log.notset(__name__+'::event_Function')
         if self.realtimeBarCount==0:
             self.handle_data_quantopian(self.context,self.qData) 
             self.realtimeBarCount+=1
-        if self.repBarFreq/5+1==self.realtimeBarCount:
+        if int(self.repBarFreq/5)+1==self.realtimeBarCount:
             self.realtimeBarCount=0
  
     def repeat_Function(self):
-        self.log.notset(__name__+'::repeat_Function repBarFreq='+str(self.repBarFreq))
-        if type(self.repBarFreq)!=type(1) or self.repBarFreq<=0:
-            self.log.error(__name__+'::repeat_Function: EXIT, repBarFreq must be a positive integer! repBarFreq=%i' %(self.repBarFreq,))
-            self.end()
-       
+        self.log.notset(__name__+'::repeat_Function: repBarFreq='+str(self.repBarFreq))
+        timeNow = self.get_datetime()
         if self.repBarFreq==1 :
-            if self.get_datetime().second!=self.stime_previous.second:
+            if timeNow.second != self.stime_previous.second:
                 self.handle_data_quantopian(self.context,self.qData)
-            if self.get_datetime().minute != self.stime_previous.minute:
-                self.check_schedules()
         elif self.repBarFreq==60: # 1 minute, like quantopian style
-            if self.get_datetime().minute != self.stime_previous.minute:
-                self.handle_data_quantopian(self.context,self.qData)
-                self.check_schedules()
-                       
+            if timeNow.minute != self.stime_previous.minute:
+                self.handle_data_quantopian(self.context,self.qData)                     
         elif self.repBarFreq in set([2,3,4,5,6,10,15,20,30]):
-            if self.get_datetime().second%self.repBarFreq==0 and self.stime_previous.second%self.repBarFreq!=0:
+            if timeNow.second%self.repBarFreq==0 and self.stime_previous.second%self.repBarFreq!=0:
                 self.handle_data_quantopian(self.context,self.qData)
         elif self.repBarFreq in set([120,180,300,900,1800]): #1 min,2min,3min,5min,15min,30min
-            for ct in range(0,60,self.repBarFreq/60):
-                if self.get_datetime().minute==ct and self.stime_previous.minute!=ct:
+            for ct in range(0,60, int(self.repBarFreq/60)):
+                if timeNow.minute==ct and self.stime_previous.minute!=ct:
                     self.handle_data_quantopian(self.context,self.qData)
         elif self.repBarFreq==3600: #hourly
-            if self.get_datetime().hour!=self.stime_previous.hour:
+            if timeNow.hour!=self.stime_previous.hour:
                 self.handle_data_quantopian(self.context,self.qData)
         else:
             self.log.error(__name__+'::repeat_Function: cannot handle repBarFreq=%i' %(self.repBarFreq,))
             self.end()
-        self.stime_previous=self.get_datetime()
+
+        if timeNow.minute != self.stime_previous.minute:
+            if self.runToday:
+                self.check_schedules()
+
+        self.stime_previous = timeNow
         
     ### supportive functions
     def check_schedules(self):        
@@ -230,3 +234,43 @@ class Trader(IBAccountManager):
                 self.log.error(__name__+'::_match: EXIT, cannot handle version=%s'%(version,))
                 self.end()
                 
+    def check_date_rules(self, aDay):
+        '''
+        Input:
+        aDay: either dt.datetime or dt.date are acceptable
+        
+        Algo:
+        if schedule_funtion is [], then run everyday
+        else, strictly follow schedule_function defines !!! IMPORTANT
+        
+        Output:
+        set self.runToday to True(run repeat_func today) or False 
+        '''
+        self.log.debug(__name__+'::check_date_rules: aDay=%s' %(str(aDay),))
+        if type(aDay) == dt.datetime:
+            aDay = aDay.date()
+        self.monthDay=nth_trading_day_of_month(aDay)
+        self.weekDay=nth_trading_day_of_week(aDay)
+        if self.monthDay=='marketClose' and self.weekDay=='marketClose':
+            self.runToday=False
+        elif self.monthDay=='marketClose' and self.weekDay!='marketClose':
+            self.log.error(__name__+'::check_date_rules: EXIT,\
+            onWeek != marketClose %s'%(str(self.weekDay),))
+            exit()
+        elif self.monthDay!='marketClose' and self.weekDay=='marketClose':
+            self.log.error(__name__+'::check_date_rules: EXIT,\
+            onMonth != marketClose %s'%(str(self.monthDay),))
+            exit()
+        else:
+            if self.scheduledFunctionList==[]:
+                self.runToday=True
+                return
+            for ct in self.scheduledFunctionList:
+                #print (ct.onNthMonthDay, ct.onNthWeekDay)
+                if self._match(ct.onNthMonthDay, self.monthDay, 'monthWeek')\
+                         and self._match(ct.onNthWeekDay, self.weekDay, 'monthWeek'):
+                    self.runToday=True
+                    #print ('TURN ON toay')
+                    return
+            self.log.debug(__name__+'::check_date_rules: %s = not trading date' %(str(aDay),))
+            self.runToday=False

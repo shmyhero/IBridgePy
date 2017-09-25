@@ -556,7 +556,7 @@ class IBAccountManager(IBCpp.IBClient):
                     expiry='',
                     strike=-1,
                     right='',
-                    multiplier=-1,
+                    multiplier='',
                     includeExpired=False):
         self.log.notset(__name__+'::superSymbol')  
         a_security= Security(secType=secType, symbol=symbol, currency=currency,

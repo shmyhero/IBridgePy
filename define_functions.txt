@@ -9,6 +9,7 @@ log = trader.log
 get_datetime=trader.get_datetime
 order=trader.order
 order_target=trader.order_target
+order_percent=trader.order_percent
 cancel_order=trader.cancel_order
 cancel_all_orders=trader.cancel_all_orders
 roundToMinTick=trader.roundToMinTick

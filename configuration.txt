@@ -81,6 +81,11 @@ except:
     before_trading_start=None
 
 try:
+    id(handle_data)
+except:
+    handle_data=None
+
+try:
     id(trader)
     time.sleep(1)
     trader.disconnect()

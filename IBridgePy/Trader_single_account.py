@@ -237,6 +237,16 @@ class Trader(Trader):
         else:
             self.log.debug(__name__+'::order_target: %s No action is needed' %(str(security),))
             return 0
+            
+    def order_percent(self, security, amount, style=MarketOrder(),orderRef='',
+                     accountCode='default'):
+        self.log.notset(__name__ + '::order_percent') 
+        if amount > 1.0 or amount < -1.0:
+            self.log.error(__name__+'::order_percent: EXIT, amount=%s [-1.0, 1.0]' %(str(amount),))
+            exit()
+        targetShare = int(self.PORTFOLIO.portfolio_value / self.show_real_time_price(security, 'ask_price'))
+        return self.order(security, amount=int(targetShare * amount), style=style,
+                          orderRef=orderRef, accountCode=accountCode)
 
     def order_target_II(self, security, amount, style=MarketOrder(), accountCode='default'):
         self.log.notset(__name__ + '::order_target_II') 

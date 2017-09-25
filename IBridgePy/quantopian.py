@@ -17,21 +17,30 @@ def search_security_in_file(secType, symbol, param, waive=False):
         elif param=='primaryExchange':
             return 'IDEALPRO'
         else:
-            pass
+            error_messages(5, secType + ' ' + symbol + ' ' + param)
     else:
         tmp_df = stockList[(stockList['Symbol'] == symbol)&(stockList['secType'] == secType)]
-        if (tmp_df.shape[0] > 0):
+        if tmp_df.shape[0] == 1:
             exchange = tmp_df['exchange'].values[0]
             primaryExchange=tmp_df['primaryExchange'].values[0]
             if param=='exchange':
-                return exchange
+                if type(exchange) == float:
+                    if secType == 'STK':
+                        return 'SMART'
+                    else:
+                        error_messages(4, secType + ' ' + symbol + ' ' + param)
+                else:
+                    return exchange
             elif param=='primaryExchange':
                 return primaryExchange
             else:
-                pass
-    if waive:
-        return 'NA'
-    error_messages(1, secType + ' ' + symbol + ' ' + param)
+                error_messages(5, secType + ' ' + symbol + ' ' + param)
+        elif tmp_df.shape[0] > 1:
+            error_messages(3, secType + ' ' + symbol + ' ' + param)
+        else:          
+            if waive:
+                return 'NA'
+            error_messages(4, secType + ' ' + symbol + ' ' + param)
         
 def error_messages(n, st):
     if n == 1:
@@ -42,6 +51,18 @@ def error_messages(n, st):
         print ('Definition of %s is not clear!' %(st,))
         print ('Please use superSymbol to define a security')
         print (r'http://www.ibridgepy.com/ibridgepy-documentation/#superSymbol')
+        exit()
+    elif n == 3:
+        print ('Found too many %s in IBridgePy/security_info.csv' %(st,))
+        print ('%s must be unique.' %(' '.join(st.split(' ')[:-1]),))
+        exit()
+    elif n == 4:
+        print ('Exchange of %s is missing.' %(' '.join(st.split(' ')[:-1]),))
+        print ('Please add this security in IBridgePy/security_info.csv')
+        exit()
+    elif n == 5:
+        print ('%s of %s is missing.' %(st.split(' ')[-1],' '.join(st.split(' ')[:-1])))
+        print ('Please add this info in IBridgePy/security_info.csv')
         exit()
     
     
@@ -124,8 +145,13 @@ def from_contract_to_security(a_contract, logLevel='INFO'):
         #print (para, tmp)
         if tmp != '':
             setattr(ans, para, tmp)
-    if ans.exchange=='':
-        ans.exchange=search_security_in_file(ans.secType,ans.symbol, 'exchange')
+            
+    # It is very interesting to find out that a position from IB server does 
+    # have an exchange info, for example, XIV has an exchange of NASDAQ
+    # But, that exchange won't work when it is used in the following code.
+    # the error message is No definition. 
+    # The solution is to add 'SMART' to stocks
+    ans.exchange=search_security_in_file(ans.secType,ans.symbol, 'exchange')
     if ans.primaryExchange=='':
         ans.primaryExchange=search_security_in_file(ans.secType,ans.symbol, 'primaryExchange')
     return ans
@@ -696,4 +722,4 @@ if __name__ == '__main__':
     #print (a.__dict__)
     
     #######
-    print (search_security_in_file('STK', 'GOOG', 'primaryExchange'))
+    print (search_security_in_file('STK', 'XIV', 'exchange'))

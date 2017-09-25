@@ -2,7 +2,7 @@
 """
 Created on Fri Jun  2 17:45:12 2017
 
-@author: h00754684
+@author: IBridgePy@gmail.com
 """
 
 '''
@@ -80,22 +80,22 @@ def nth_trading_day_of_week(aDay):
     return tmp,-(sm-tmp)
  
 def nth_trading_day_of_month(aDay):
-    if type(aDay)==dt.datetime:
-        aDay=aDay.date()
+    if type(aDay) == dt.datetime:
+        aDay = aDay.date()
     if not trading_day(aDay):
         return 'marketClose' # day is not a trading day
-    #if day is a trading day, return Nth trading day of the week
-    # 0 is 1st trading day of week
-    tmp=aDay.day
-    ans=tmp-1
-    start=aDay.replace(day=1)
-    i=0
-    while i<=tmp:
-        if not trading_day(start+dt.timedelta(days=i)):
-            ans-=1
-        i+=1
-    sm=count_trading_days_in_a_month(aDay)
-    return ans,-(sm-ans)
+    #if day is a trading day, return Nth trading day of the month
+    # 0 is 1st trading day of month
+    tmp = aDay.day
+    ans = tmp - 1
+    start = aDay.replace(day = 1)
+    i = 0
+    while i < tmp:
+        if not trading_day(start + dt.timedelta(days = i)):
+            ans -= 1
+        i += 1
+    sm = count_trading_days_in_a_month(aDay)
+    return ans,-(sm - ans)
 
 def count_trading_days(startDay, endDay):
     '''
@@ -143,13 +143,13 @@ def switch_goBack(startTime, endTime):
 if __name__ == '__main__':
     print ('start')
     #print(get_trading_close_holidays(dt.date(2017,4,1), dt.date(2017,4,30)))
-    #print(trading_day(dt.date(2018,11,21)))
-    #print (nth_trading_day_of_week(dt.date(2017,4,13)))
-    #print (nth_trading_day_of_month(dt.date(2017,5,30)))
+    #print(trading_day(dt.date(2017,9,1)))
+    print (nth_trading_day_of_week(dt.date(2017,9,1)))
+    #print (nth_trading_day_of_month(dt.date(2017,9,1)))
     #print (count_trading_days(dt.date(2017,5,1), dt.date(2017,5,31)))
     #print (dt.date(2017,4,13)+MonthEnd(1))
     #print (count_trading_days(dt.date(2017,4,1), dt.date(2017,4,13)+MonthEnd(1)))
     #print (count_trading_days_in_a_month(dt.date(2017,5,13)))
     #print (count_trading_days_in_a_week(dt.date(2017,6,1)))
     #print (get_params_of_a_daytime(dt.datetime.now()))
-    print (get_params_of_a_daytime(dt.datetime(2017,5,30,12,30)))
+    #print (get_params_of_a_daytime(dt.datetime(2017,5,30,12,30)))
