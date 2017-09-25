@@ -27,8 +27,8 @@ def search_security_in_file(secType, symbol, param, waive=False):
                 if type(exchange) == float:
                     if secType == 'STK':
                         return 'SMART'
-                    else:
-                        error_messages(4, secType + ' ' + symbol + ' ' + param)
+                    #else:
+                    #    error_messages(4, secType + ' ' + symbol + ' ' + param)
                 else:
                     return exchange
             elif param=='primaryExchange':
