@@ -1,8 +1,10 @@
 import datetime
-import pandas as pd
 from abc import ABCMeta, abstractmethod
+
+import pandas as pd
+
+from dataaccess.db import YahooEquityDAO
 from tradetime import TradeTime
-from dataaccess import YahooEquityDAO
 
 
 class AbstractDataProvider(object):
@@ -25,7 +27,7 @@ class AbstractDataProvider(object):
         return None
 
 
-class YahooDBProvider(AbstractDataProvider):
+class DBProvider(AbstractDataProvider):
 
     def __init__(self):
         pass
@@ -43,23 +45,46 @@ class YahooDBProvider(AbstractDataProvider):
         yahoo_symbol = self.get_symbol(symbol)
         from_date = TradeTime.get_latest_trade_date() - datetime.timedelta(window * 2)
         rows = YahooEquityDAO().get_all_equity_price_by_symbol(yahoo_symbol, from_date.strftime('%Y-%m-%d'), price_field)
-        df = pd.DataFrame(rows[-window:])
-        df.columns = ['date', 'price']
-        return df
-
+        return rows[-window:]
 
 class MyData(object):
 
     @staticmethod
     def get_data_provider():
-        return YahooDBProvider()
+        return DBProvider()
 
     @staticmethod
-    def history(symbol, field = 'price', window = 30 ):
+    def history(assets, field = 'price', window = 30 ):
+        """
+        get the history data
+        :param assets: symbol likes SPX, SPY, VIX, QQQ, etc, or iterable asset
+        :param field: support open, close, high, low, price, the price = close
+        :param window: the count of records.
+        :return:
+        """
         provider = MyData.get_data_provider()
-        return provider.history(symbol, field, window)
-
+        if hasattr(assets, '__iter__'):
+            results = None
+            columns = ['date']
+            for symbol in assets:
+                columns.append(symbol)
+                rows = provider.history(symbol, field, window)
+                if results is None:
+                    results = map(list, rows)
+                else:
+                    map(lambda x,y: x.append(y[1]), results, rows)
+            df = pd.DataFrame(results)
+            df.columns = columns
+            return df
+        else:
+            symbol = str(assets)
+            rows = provider.history(symbol, field, window)
+            df = pd.DataFrame(rows)
+            df.columns = ['date', 'price']
+            return df
 
 if __name__ == '__main__':
     #print MyData.history('QQQ', field = 'close', window = 100)
-    print MyData.history('SPX')
+    #print MyData.history('SPX')
+    print MyData.history(['SPY', 'VIX'], window=50)
+    #print map(lambda x : MyData.history(x), ['VIX', 'NDX'])

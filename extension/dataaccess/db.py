@@ -1,7 +1,9 @@
 import traceback
+
 import mysql.connector
-from utils import Logger
-from common import PathMgr,ConfigMgr
+
+from extension.common.common import PathMgr, ConfigMgr
+from extension.common.utils import Logger
 
 
 class BaseDAO(object):
