@@ -43,9 +43,9 @@ class DBProvider(AbstractDataProvider):
             raise Exception('the field should be in %s...'%fields)
         price_field = fields_dic[field]
         yahoo_symbol = self.get_symbol(symbol)
-        from_date = TradeTime.get_latest_trade_date() - datetime.timedelta(window * 2)
+        from_date = TradeTime.get_from_date_by_window(window)
         rows = YahooEquityDAO().get_all_equity_price_by_symbol(yahoo_symbol, from_date.strftime('%Y-%m-%d'), price_field)
-        return rows[-window:]
+        return rows
 
 class MyData(object):
 
@@ -73,18 +73,15 @@ class MyData(object):
                     results = map(list, rows)
                 else:
                     map(lambda x,y: x.append(y[1]), results, rows)
-            df = pd.DataFrame(results)
-            df.columns = columns
+            df = pd.DataFrame(map(lambda x: x[1:], results), index=map(lambda x: x[0], results), columns=columns[1:])
             return df
         else:
             symbol = str(assets)
             rows = provider.history(symbol, field, window)
-            df = pd.DataFrame(rows)
-            df.columns = ['date', 'price']
+            df = pd.DataFrame(map(lambda x: x[1:], rows), index= map(lambda x: x[0], rows), columns = ['price'])
             return df
 
 if __name__ == '__main__':
     #print MyData.history('QQQ', field = 'close', window = 100)
     #print MyData.history('SPX')
-    print MyData.history(['SPY', 'VIX'], window=50)
-    #print map(lambda x : MyData.history(x), ['VIX', 'NDX'])
+    print MyData.history(['SPY', 'VIX'], window=252)
