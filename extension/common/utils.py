@@ -3,6 +3,7 @@ import logging
 import datetime
 import os
 import glob
+import urllib2
 
 
 class Logger:
@@ -104,3 +105,18 @@ class IOHelper(object):
         sub_path = '*.' + ext if ext else '*'
         str_path = os.path.join(path, sub_path)
         return glob.glob(str_path)
+
+
+class HttpHelper:
+
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def http_get(url, headers=None):
+        if headers:
+            f = urllib2.urlopen(urllib2.Request(url=url, headers=headers))
+        else:
+            f = urllib2.urlopen(url)
+        s = f.read()
+        return s

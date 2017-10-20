@@ -1,7 +1,6 @@
 import traceback
 
 import mysql.connector
-
 from extension.common.common import PathMgr, ConfigMgr
 from extension.common.utils import Logger
 

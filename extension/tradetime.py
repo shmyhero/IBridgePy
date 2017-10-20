@@ -119,8 +119,6 @@ class TradeTime(object):
                 count +=1
 
 
-
-
 if __name__ == '__main__':
     print TradeTime.get_trading_close_holidays(2017)
     print TradeTime.get_half_trade_dates(2015)

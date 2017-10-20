@@ -1,51 +1,8 @@
-import datetime
-from abc import ABCMeta, abstractmethod
-
 import pandas as pd
-
-from dataaccess.db import YahooEquityDAO
-from tradetime import TradeTime
+from dataaccess.history import DBProvider
 
 
-class AbstractDataProvider(object):
 
-    __metaclass__ = ABCMeta
-
-    @abstractmethod
-    def get_symbol_mapping(self):
-        return {}
-
-    def get_symbol(self, symbol):
-        mapping_dic = self.get_symbol_mapping()
-        if symbol in mapping_dic.keys():
-            return mapping_dic[symbol]
-        else:
-            return symbol
-
-    @abstractmethod
-    def history(self, symbol, field, window):
-        return None
-
-
-class DBProvider(AbstractDataProvider):
-
-    def __init__(self):
-        pass
-
-    def get_symbol_mapping(self):
-        return {'SPX':'^GSPC', 'INDU':'^DJI', 'VIX':'^VIX', 'VXV':'^VXV', 'VVIX': '^VVIX', 'RUT':'^RUT', 'NDX': '^NDX'}
-
-    def history(self, symbol, field, window):
-        fields_dic = {'open': 'openPrice', 'close': 'adjclosePrice', 'high': 'highPrice', 'low': 'lowPrice',
-                      'price': 'adjclosePrice'}
-        fields = fields_dic.keys()
-        if field.lower() not in field:
-            raise Exception('the field should be in %s...'%fields)
-        price_field = fields_dic[field]
-        yahoo_symbol = self.get_symbol(symbol)
-        from_date = TradeTime.get_from_date_by_window(window)
-        rows = YahooEquityDAO().get_all_equity_price_by_symbol(yahoo_symbol, from_date.strftime('%Y-%m-%d'), price_field)
-        return rows
 
 class MyData(object):
 
