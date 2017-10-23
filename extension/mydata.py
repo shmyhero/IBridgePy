@@ -1,13 +1,13 @@
 import pandas as pd
 from dataaccess.history import DBProvider
-
-
+from dataaccess.symbols import Symbols
+from dataaccess.webscraper import YahooScraper, BarChartScraper
 
 
 class MyData(object):
 
     @staticmethod
-    def get_data_provider():
+    def get_historical_data_provider():
         return DBProvider()
 
     @staticmethod
@@ -19,7 +19,7 @@ class MyData(object):
         :param window: the count of records.
         :return:
         """
-        provider = MyData.get_data_provider()
+        provider = MyData.get_historical_data_provider()
         if hasattr(assets, '__iter__'):
             results = None
             columns = ['date']
@@ -38,7 +38,27 @@ class MyData(object):
             df = pd.DataFrame(map(lambda x: x[1:], rows), index= map(lambda x: x[0], rows), columns = ['price'])
             return df
 
+    @staticmethod
+    def get_current_data_provider(symbols):
+        for symbol in symbols:
+            if symbol in Symbols.Indexes:
+                return YahooScraper()
+        return BarChartScraper()
+
+    @staticmethod
+    def current(symbols, fields=['price']):
+        field_dic = {'open':0, 'close':1, 'price':1, 'high':2, 'low':3, 'volume':4, 'contract':5 }
+        indexes = map(lambda x: field_dic[x],fields)
+        provider = MyData.get_current_data_provider(symbols)
+        records = provider.get_current_data(symbols)
+        rows = map(lambda record: map(lambda index: record[index], indexes), records)
+        df = pd.DataFrame(rows, columns=fields)
+        return df
+
+
+
 if __name__ == '__main__':
     #print MyData.history('QQQ', field = 'close', window = 100)
     #print MyData.history('SPX')
-    print MyData.history(['SPY', 'VIX'], window=252)
+    #print MyData.history(['SPY', 'VIX'], window=252)
+    print MyData.current(['SPY', 'SPX'], ['price', 'volume'])
