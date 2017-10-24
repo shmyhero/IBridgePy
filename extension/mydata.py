@@ -62,4 +62,5 @@ if __name__ == '__main__':
     #print MyData.history('QQQ', field = 'close', window = 100)
     #print MyData.history('SPX')
     #print MyData.history(['SPY', 'VIX'], window=252)
-    print MyData.current(['SPY', 'QQQ', 'VIX', 'NDX'], ['price', 'volume'])
+    #print MyData.current(['SPY', 'QQQ', 'VIX', 'NDX'], ['price', 'volume'])
+    print MyData.current(['SPY', 'QQQ'], ['price', 'volume'])

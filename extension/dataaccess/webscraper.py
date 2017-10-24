@@ -1,7 +1,7 @@
 import json
 from abc import ABCMeta, abstractmethod
 from datetime import datetime
-from common.utils import HttpHelper
+from extension.common.utils import HttpHelper
 from symbols import Symbols
 
 class WebScraper(object):
