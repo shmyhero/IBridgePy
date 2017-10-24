@@ -52,7 +52,8 @@ class MyData(object):
         provider = MyData.get_current_data_provider(symbols)
         records = provider.get_current_data(symbols)
         rows = map(lambda record: map(lambda index: record[index], indexes), records)
-        df = pd.DataFrame(rows, columns=fields)
+        prefixed_row = map(lambda x,y: [x] + y, symbols, rows )
+        df = pd.DataFrame(prefixed_row, columns=['symbol'] + fields)
         return df
 
 
@@ -61,4 +62,4 @@ if __name__ == '__main__':
     #print MyData.history('QQQ', field = 'close', window = 100)
     #print MyData.history('SPX')
     #print MyData.history(['SPY', 'VIX'], window=252)
-    print MyData.current(['SPY', 'SPX'], ['price', 'volume'])
+    print MyData.current(['SPY', 'QQQ', 'VIX', 'NDX'], ['price', 'volume'])

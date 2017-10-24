@@ -47,7 +47,7 @@ class YahooScraper(WebScraper):
         url = url_template.format(','.join(yahoo_symbols))
         #print url
         content = HttpHelper.http_get(url)
-        print content
+        #print content
         records = content.split('\n')[:-1]
         return map(YahooScraper.parse_record, records)
 
@@ -66,7 +66,7 @@ class BarChartScraper(WebScraper):
         url = url_template.format(','.join(symbols))
         #print url
         content = HttpHelper.http_get(url)
-        print content
+        #print content
         return list(BarChartScraper.parse_content(content))
 
 
