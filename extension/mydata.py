@@ -1,7 +1,7 @@
 import pandas as pd
 from dataaccess.history import DBProvider
 from dataaccess.symbols import Symbols
-from dataaccess.webscraper import YahooScraper, BarChartScraper
+from dataaccess.webscraper import YahooScraper, BarChartScraper, MarketWatchScraper
 
 
 class MyData(object):
@@ -40,10 +40,14 @@ class MyData(object):
 
     @staticmethod
     def get_current_data_provider(symbols):
-        for symbol in symbols:
-            if symbol in Symbols.Indexes:
-                return YahooScraper()
-        return BarChartScraper()
+        if len(symbols) == 1:
+            return MarketWatchScraper()
+        else:
+            return YahooScraper()
+        #for symbol in symbols:
+        #    if symbol in Symbols.Indexes:
+        #        return YahooScraper()
+        #return BarChartScraper()
 
     @staticmethod
     def current(symbols, fields=['price']):
@@ -62,4 +66,7 @@ if __name__ == '__main__':
     #print MyData.history('QQQ', field = 'close', window = 100)
     #print MyData.history('SPX')
     #print MyData.history(['SPY', 'VIX'], window=252)
-    print MyData.current(['SPY', 'QQQ', 'VIX', 'NDX'], ['price', 'volume'])
+    #print MyData.current(['SPY', 'QQQ', 'VIX', 'NDX'], ['price', 'volume'])
+    #print MyData.current(['SPY', 'QQQ', 'AAPL'], ['price', 'open', 'high', 'low', 'close', 'volume'])
+    #print MyData.current(['SPY', 'QQQ', 'AAPL', 'NDX'], ['price', 'open', 'high', 'low', 'close', 'volume'])
+    print MyData.current(['DJI'], ['price', 'open', 'high', 'low', 'close', 'volume'])

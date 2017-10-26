@@ -3,6 +3,8 @@ from abc import ABCMeta, abstractmethod
 from datetime import datetime
 from common.utils import HttpHelper
 from symbols import Symbols
+from common.utils import string_fetch
+
 
 class WebScraper(object):
 
@@ -45,7 +47,7 @@ class YahooScraper(WebScraper):
         yahoo_symbols = map(lambda x: Symbols.get_mapped_symbol(x, Symbols.YahooSymbolMapping), symbols)
         url_template = 'http://finance.yahoo.com/d/quotes.csv?s={}&f=ol1hgvd1'
         url = url_template.format(','.join(yahoo_symbols))
-        #print url
+        print url
         content = HttpHelper.http_get(url)
         #print content
         records = content.split('\n')[:-1]
@@ -70,8 +72,31 @@ class BarChartScraper(WebScraper):
         return list(BarChartScraper.parse_content(content))
 
 
+class MarketWatchScraper(WebScraper):
+
+    def get_prices(self, url):
+        content = HttpHelper.http_get(url)
+        #print content
+        sub_content = string_fetch(content, 'mw-rangeBar precision=', 'Day Low')
+        #print sub_content
+        open = float(string_fetch(sub_content, 'day-open=\"', '\"'))
+        close = float(string_fetch(sub_content, 'bar-low=\"', '\"'))
+        high = float(string_fetch(sub_content, 'range-high=\"', '\"'))
+        low = float(string_fetch(sub_content, 'range-low=\"', '\"'))
+        return [open, close, high, low]
+
+    def get_symbol_data(self, symbol):
+        url = 'https://www.marketwatch.com/investing/fund/%s' % symbol
+        return self.get_prices(url) + [None, None]
+
+    def get_current_data(self, symbols):
+        return map(self.get_symbol_data, symbols)
+
+
+
 
 if __name__ == '__main__':
-    #print YahooScraper().get_current_data(['SPX', 'NDX'])
-    print YahooScraper().get_current_data(['YM=F', 'ES=F'])
-    #print BarChartScraper().get_current_data(['SPY','QQQ'])
+    #print YahooScraper().get_current_data(['SPX', 'SPY'])
+    #print YahooScraper().get_current_data(['YM=F', 'ES=F'])
+    print BarChartScraper().get_current_data(['SPY','QQQ'])
+    #print MarketWatchScraper().get_current_data(['DJI', 'SPX'])
