@@ -51,6 +51,10 @@ class MyData(object):
 
     @staticmethod
     def current(symbols, fields=['price']):
+        if type(symbols) is str:
+            symbols = [symbols]
+        if type(fields) is str:
+            fields = [fields]
         field_dic = {'open':0, 'close':1, 'price':1, 'high':2, 'low':3, 'volume':4, 'contract':5 }
         indexes = map(lambda x: field_dic[x],fields)
         provider = MyData.get_current_data_provider(symbols)
@@ -69,4 +73,5 @@ if __name__ == '__main__':
     #print MyData.current(['SPY', 'QQQ', 'VIX', 'NDX'], ['price', 'volume'])
     #print MyData.current(['SPY', 'QQQ', 'AAPL'], ['price', 'open', 'high', 'low', 'close', 'volume'])
     #print MyData.current(['SPY', 'QQQ', 'AAPL', 'NDX'], ['price', 'open', 'high', 'low', 'close', 'volume'])
-    print MyData.current(['DJI'], ['price', 'open', 'high', 'low', 'close', 'volume'])
+    #print MyData.current(['DJI'], ['price', 'open', 'high', 'low', 'close', 'volume'])
+    print MyData.current('DJI', 'price')
