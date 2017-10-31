@@ -40,10 +40,11 @@ class MyData(object):
 
     @staticmethod
     def get_current_data_provider(symbols):
-        if len(symbols) == 1:
-            return MarketWatchScraper()
-        else:
-            return YahooScraper()
+        return MarketWatchScraper()
+        #if len(symbols) == 1:
+        #    return MarketWatchScraper()
+        #else:
+        #    return YahooScraper()
         #for symbol in symbols:
         #    if symbol in Symbols.Indexes:
         #        return YahooScraper()
@@ -71,7 +72,7 @@ if __name__ == '__main__':
     #print MyData.history('SPX')
     #print MyData.history(['SPY', 'VIX'], window=252)
     #print MyData.current(['SPY', 'QQQ', 'VIX', 'NDX'], ['price', 'volume'])
-    #print MyData.current(['SPY', 'QQQ', 'AAPL'], ['price', 'open', 'high', 'low', 'close', 'volume'])
+    print MyData.current(['SPY', 'QQQ', 'AAPL'], ['price', 'open', 'high', 'low', 'close', 'volume'])
     #print MyData.current(['SPY', 'QQQ', 'AAPL', 'NDX'], ['price', 'open', 'high', 'low', 'close', 'volume'])
     #print MyData.current(['DJI'], ['price', 'open', 'high', 'low', 'close', 'volume'])
-    print MyData.current('DJI', 'price')
+    #print MyData.current('DJI', 'price')
