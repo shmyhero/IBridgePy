@@ -20,8 +20,8 @@ import pytz
 from IBridgePy.quantopian import Security, PositionClass, \
 create_contract, MarketOrder, OrderClass, same_security, \
 DataClass,from_contract_to_security,EndCheckListClass, \
-ReqHistClass, from_symbol_to_security, calendars, \
-TimeBasedRules,search_security_in_Qdata
+from_symbol_to_security, calendars, \
+TimeBasedRules,search_security_in_Qdata, ReqData
 
 from IBridgePy import IBCpp
 import datetime as dt 
@@ -50,22 +50,26 @@ class IBAccountManager(IBCpp.IBClient):
         """
         if errorCode in [2119,2104,2108,2106, 2107, 2103]:
             pass
-        else:
-            self.log.error(__name__ + ": " + 'errorId = ' + str(errorId) + 
-            ', errorCode = ' + str(errorCode) + ', error message: ' + errorString)
+        elif errorCode == 202: # cancel order is confirmed
+            self.end_check_list.loc[errorId, 'status'] = 'Done'
+            
+        elif errorCode in [399, 504, 165]: # No action, just show error message
+            self.log.error(__name__ + ':errorId = %s, errorCode = %s, error message: %s' %(str(errorId), str(errorCode), errorString))
+
+        elif errorCode >= 110 and errorCode <= 449:
+            self.log.error(__name__ + ':EXIT errorId = %s, errorCode = %s, error message: %s' %(str(errorId), str(errorCode), errorString))
+            self.log.error(__name__ + ':EXIT IBridgePy version = %s' %(str(self.versionNumber),))
+            exit()
+          
+        elif errorCode in [1100, 1101, 1102]:
             if errorCode==1100:
                 self.connectionGatewayToServer=False
             elif errorCode in [1101, 1102]:
                 self.connectionGatewayToServer=True
-            elif errorCode==1300:
-                exit()
-                
-            elif errorCode==320:
-                exit()
-
-            elif errorCode == 504:
-                self.log.error(__name__ + ": " + 'errorId = ' + str(errorId) + 
-                ', errorCode = ' + str(errorCode) + ', error message: ' + errorString)
+        else:
+            self.log.error(__name__ + ':EXIT errorId = %s, errorCode = %s, error message: %s' %(str(errorId), str(errorCode), errorString))
+            self.log.error(__name__ + ':EXIT IBridgePy version= %s' %(str(self.versionNumber),))
+            exit()               
             
     def currentTime(self, tm):
         """
@@ -75,7 +79,9 @@ class IBAccountManager(IBCpp.IBClient):
         self.log.notset(__name__+'::currentTime')
         self.recordedServerUTCtime=tm # float, utc number
         self.recordedLocalTime = dt.datetime.now() # a datetime, without tzinfo
-                                                 
+        reqId = self.end_check_list[self.end_check_list['reqType'] == 'reqCurrentTime']['reqId']      
+        self.end_check_list.loc[reqId, 'status'] = 'Done'
+                                              
     def roundToMinTick(self, price, minTick=0.01):
         """
         for US interactive Brokers, the minimum price change in US stocks is
@@ -107,9 +113,8 @@ class IBAccountManager(IBCpp.IBClient):
         if change > limit: # if time limit exceeded
             self.log.error(__name__+ '::check_timer: request_data failed after '+str(limit)+' seconds')
             self.log.error(__name__+'::check_timer: notDone items in self.end_check_list')           
-            tp=self.search_in_end_check_list(notDone=True, output_version='list')
-            for ct in tp:
-                self.log.error(str(tp[ct]))            
+            tp=self.end_check_list[self.end_check_list['status'] != 'Done']
+            self.log.error(str(tp))            
             return True
         else:
             return None
@@ -123,6 +128,8 @@ class IBAccountManager(IBCpp.IBClient):
         """        
         self.log.debug(__name__ + '::nextValidId: Id = ' + str(orderId))
         self.nextId = orderId
+        reqId = self.end_check_list[self.end_check_list['reqType'] == 'reqIds']['reqId']      
+        self.end_check_list.loc[reqId, 'status'] = 'Done'
                                                  
     def update_DataClass(self, security, name, value=None, ls_info=None):
         self.log.notset(__name__+'::update_DataClass')  
@@ -157,9 +164,15 @@ class IBAccountManager(IBCpp.IBClient):
         """
         self.log.notset(__name__+'::tickPrice:'+str(reqId)+' '+str(tickType)+' '+str(price))
 
-        # security found is garuanteed to be in self.qData.data
-        # no need to search it anymore.
-        security=self._reqId_to_security(reqId)
+        # if reqId in self.end_check_list, then, mark it as Done
+        # else        
+        # reqId may not in self.end_check_list anymore
+        # So, record reqId in self.realTimePriceRequestedList
+        if reqId in self.end_check_list.index:
+            self.end_check_list.loc[reqId, 'status'] = 'Done'
+            security = self.end_check_list.loc[reqId, 'reqData'].param['security']
+        else:
+            security=self._reqId_to_security(reqId)
    
         self.qData.data[security].datetime=self.get_datetime()
         if tickType==1: #Bid price
@@ -172,6 +185,7 @@ class IBAccountManager(IBCpp.IBClient):
             self.update_DataClass(security, 'ask_price_flow', price)
         elif tickType==4: #Last price
             self.qData.data[security].last_traded = price
+            self.update_last_price_in_positions(price, security)
             self.update_DataClass(security, 'last_traded_flow', price)
         elif tickType==6: #High daily price
             self.qData.data[security].high=price
@@ -198,13 +212,13 @@ class IBAccountManager(IBCpp.IBClient):
         if tickType == 0: # Bid Size
             self.qData.data[security].bid_size = size
             #self.update_DataClass(security, 'bid_size_flow', size)
-        if tickType == 3: # Ask Size
+        elif tickType == 3: # Ask Size
             self.qData.data[security].ask_size = size
             #self.update_DataClass(security, 'ask_size_flow', size)  
-        if tickType == 3: # Last Size
+        elif tickType == 5: # Last Size
             self.qData.data[security].size = size
             #self.update_DataClass(security, 'last_size_flow', size)
-        if tickType == 8: # Volume
+        elif tickType == 8: # Volume
             self.qData.data[security].volume = size
                     
     def tickString(self, reqId, field, value):
@@ -260,30 +274,26 @@ class IBAccountManager(IBCpp.IBClient):
         return the historical data for requested security
         """
         self.log.notset(__name__+'::historicalData: reqId='+str(reqId)+','+date)
-        loc=self.search_in_end_check_list(reqId=reqId, reqType='historyData')
+        sec = self.end_check_list.loc[reqId, 'reqData'].param['security']
+        barSize = self.end_check_list.loc[reqId, 'reqData'].param['barSize']
         
-        if self.receivedHistFlag==False:
-            sec=self.end_check_list[loc].security
-            barSize=self.end_check_list[loc].input_parameters.barSize
-            self.log.debug(__name__+'::historicalData: Received 1st row %s %s'%(sec,barSize))
+        if self.receivedHistFlag == False:
+            self.log.debug(__name__+'::historicalData: Received 1st row %s %s'%(sec, barSize))
             self.receivedHistFlag=True
              
         if 'finished' in str(date):
-            self.end_check_list[loc].status='Done'       
+            self.end_check_list.loc[reqId, 'status'] = 'Done'       
             
             #if the returned security is in self.qData.data, put the historicalData into self.qData.data
             # else, add the new security in self.qData.data
-            sec=self.end_check_list[loc].security
-            barSize=self.end_check_list[loc].input_parameters.barSize
-            self.qData.data[search_security_in_Qdata(self.qData,sec, self.logLevel)].hist[barSize]=self.end_check_list[loc].return_result               
-            self.log.notset(__name__ + '::historicalData: finished req hist data for '+str(sec))
+            self.log.notset(__name__ + '::historicalData: finished req hist data for ' + str(sec))
             self.log.notset('First line is ')
-            self.log.notset(str(self.end_check_list[loc].return_result.iloc[0]))
+            self.log.notset(str(self.qData.data[sec].hist[barSize].iloc[0]))
             self.log.notset('Last line is ')
-            self.log.notset(str(self.end_check_list[loc].return_result.iloc[-1]))
+            self.log.notset(str(self.qData.data[sec].hist[barSize].iloc[-1]))
             
         else:
-            if self.end_check_list[loc].input_parameters.formatDate==1:
+            if self.end_check_list.loc[reqId, 'reqData'].param['formatDate']==1:
                 if '  ' in date:                       
                     date=dt.datetime.strptime(date, '%Y%m%d  %H:%M:%S') # change string to datetime                        
                 else:
@@ -299,17 +309,17 @@ class IBAccountManager(IBCpp.IBClient):
                     #date = date.astimezone(self.showTimeZone)
                     #date = dt.datetime.strftime(date, '%Y-%m-%d %Z')                                      
 
-            if date in self.end_check_list[loc].return_result.index:
-                self.end_check_list[loc].return_result['open'][date]=price_open
-                self.end_check_list[loc].return_result['high'][date]=price_high
-                self.end_check_list[loc].return_result['low'][date]=price_low
-                self.end_check_list[loc].return_result['close'][date]=price_close
-                self.end_check_list[loc].return_result['volume'][date]=volume
+            if date in self.qData.data[sec].hist[barSize].index:
+                self.qData.data[sec].hist[barSize]['open'][date]=price_open
+                self.qData.data[sec].hist[barSize]['high'][date]=price_high
+                self.qData.data[sec].hist[barSize]['low'][date]=price_low
+                self.qData.data[sec].hist[barSize]['close'][date]=price_close
+                self.qData.data[sec].hist[barSize]['volume'][date]=volume
             else:
                 newRow = pd.DataFrame({'open':price_open,'high':price_high,
                                        'low':price_low,'close':price_close,
                                        'volume':volume}, index = [date])
-                self.end_check_list[loc].return_result=self.end_check_list[loc].return_result.append(newRow)
+                self.qData.data[sec].hist[barSize] = self.qData.data[sec].hist[barSize].append(newRow)
 
     def realtimeBar(self, reqId, time, price_open, price_high, price_low, price_close, volume, wap, count):
         """
@@ -317,6 +327,8 @@ class IBAccountManager(IBCpp.IBClient):
         return realTimebars for requested security every 5 seconds
         """
         self.log.debug(__name__+'::realtimeBar: reqId='+str(reqId)+','+str(dt.datetime.fromtimestamp(time)))
+        if reqId in self.end_check_list.index:
+            self.end_check_list.loc[reqId, 'status'] = 'Done'
         security=self._reqId_to_security(reqId) #same thing in tickPrice             
         self.update_DataClass(security, 'realTimeBars', ls_info=[time, price_open, price_high, price_low, price_close, volume, wap, count])
         self.realtimeBarCount+=1 
@@ -335,16 +347,20 @@ class IBAccountManager(IBCpp.IBClient):
     def commissionReport(self,commissionReport):
         self.log.notset(__name__+'::commissionReport: DO NOTHING'+str(commissionReport))        
 
+    def openOrderEnd(self):
+        self.log.debug(__name__+'::openOrderEnd')
+        reqId = self.end_check_list[(self.end_check_list['reqType'] == 'reqAllOpenOrders') | 
+                                    (self.end_check_list['reqType'] == 'reqOpenOrders') |
+                                    (self.end_check_list['reqType'] == 'reqAutoOpenOrders')]['reqId']      
+        self.end_check_list.loc[reqId, 'status'] = 'Done'      
         
     def positionEnd(self):
         self.log.notset(__name__+'::positionEnd: all positions recorded')
-        ct=self.search_in_end_check_list(reqType='positions')
-        self.end_check_list[ct].status='Done'
+        reqId = self.end_check_list[self.end_check_list['reqType'] == 'reqPositions']['reqId']
+        self.end_check_list.loc[reqId, 'status'] = 'Done'
            
     def tickSnapshotEnd(self, reqId):
         self.log.notset(__name__+'::tickSnapshotEnd: '+str(reqId))
-        ct=self.search_in_end_check_list(reqType='marketSnapShot', reqId=reqId)
-        self.end_check_list[ct].status='Done'
                                  
     def get_datetime(self, timezone='default'):
         """
@@ -368,7 +384,6 @@ class IBAccountManager(IBCpp.IBClient):
         IB callback function to receive contract info
         '''
         self.log.notset(__name__+'::contractDetails:'+str(reqId))                                     
-        ct=self.search_in_end_check_list(reqId=reqId, reqType='contractDetails')
         if contractDetails.summary.secType=='STK':
             newRow=pd.DataFrame({'contract':self._print_contract(contractDetails.summary),
                                  'marketName':contractDetails.marketName,
@@ -385,16 +400,14 @@ class IBAccountManager(IBCpp.IBClient):
                                  'multiplier':contractDetails.summary.multiplier,
                                  'contractDetails':contractDetails
                                  },index=[0])
-        self.end_check_list[ct].return_result=self.end_check_list[ct].return_result.append(newRow)
+        self.end_check_list_result[reqId] = self.end_check_list_result[reqId].append(newRow)
 
     def contractDetailsEnd(self, reqId):
         '''
         IB callback function to receive the ending flag of contract info
         '''
         self.log.debug(__name__+'::contractDetailsEnd:'+str(reqId))
-        ct=self.search_in_end_check_list(reqId=reqId)
-        self.end_check_list[ct].status='Done'
-        self.qData.data[search_security_in_Qdata(self.qData,self.end_check_list[ct].security, self.logLevel)].contractDetails=self.end_check_list[ct].return_result
+        self.end_check_list.loc[reqId, 'status'] = 'Done'
 
     def tickGeneric(self, reqId, field, value):
         self.log.notset(__name__+'::tickGeneric: reqId=%i field=%s value=%d'\
@@ -429,11 +442,8 @@ class IBAccountManager(IBCpp.IBClient):
     
     def _request_real_time_price(self, security, waiver):
         self.log.notset(__name__+'::_request_real_time_price:'+str(security))  
-        re=search_security_in_Qdata(self.qData,security, self.logLevel)        
-        if waiver:
-            self.request_data(realTimePrice=[re],waiver=['realTimePrice'])
-        else:
-            self.request_data(realTimePrice=[re])
+        self.request_data(ReqData.reqMktData(security, waiver=waiver))
+
 
     def _reqId_to_security(self, reqId):    
         self.log.notset(__name__+'::_reqId_to_security'+str(reqId))  
@@ -447,14 +457,13 @@ class IBAccountManager(IBCpp.IBClient):
         adj_security=search_security_in_Qdata(self.qData, security, self.logLevel)        
         self.qData.data[adj_security].hist[frequency]=hist_df
 
-    def _save_info(self, security):  
+    def _save_info_toBeDeleted(self, security):  
         self.log.debug(__name__+'::_save_info')
-        sec=search_security_in_Qdata(self.qData, security, self.logLevel)               
+        #sec=search_security_in_Qdata(self.qData, security, self.logLevel)               
         # put security and reqID in dictionary for fast acess
         # it is keyed by both security and reqId
-        self.realTimePriceRequestedList[sec]=self.nextId
-        self.realTimePriceRequestedList[self.nextId]=sec
-        return sec
+        self.realTimePriceRequestedList[security] = self.nextId
+        self.realTimePriceRequestedList[self.nextId] = security
     
     def _print_contract(self, cntrct):
         if cntrct.secType=='OPT':
@@ -467,13 +476,6 @@ class IBAccountManager(IBCpp.IBClient):
             str(cntrct.strike)+','+\
             str(cntrct.right)+','+\
             str(cntrct.multiplier)   
-        elif cntrct.secType=='STK' or cntrct.secType=='CASH' or cntrct.secType=='CFD':
-            return cntrct.secType+','+\
-            str(cntrct.symbol)+','+\
-            str(cntrct.primaryExchange)+','+\
-            str(cntrct.exchange)+','+\
-            str(cntrct.currency)
-
         elif cntrct.secType=='FUT':
             return cntrct.secType+','+\
             str(cntrct.symbol)+','+\
@@ -482,9 +484,13 @@ class IBAccountManager(IBCpp.IBClient):
             str(cntrct.currency)+','+\
             str(cntrct.expiry)
         else:
-            self.log.error(__name__+'::_print_contract: EXIT, cannot handle secType=%s' %(cntrct.secType,))
-            exit()      
+            return cntrct.secType+','+\
+            str(cntrct.symbol)+','+\
+            str(cntrct.primaryExchange)+','+\
+            str(cntrct.exchange)+','+\
+            str(cntrct.currency)
 
+    ####### API functions ###################
     def get_option_greeks(self, securityOption, itemName=None):
         '''
         itemName can be a string 'delta' or a list of string
@@ -509,36 +515,44 @@ class IBAccountManager(IBCpp.IBClient):
             else:                
                 ans[ct]=getattr(self.qData.data[securityOption], ct)
         return ans
-               
+
+    def get_contract_details(self,  secType,
+                                    symbol,
+                                    currency='USD',
+                                    exchange='',
+                                    primaryExchange='',
+                                    expiry='',
+                                    strike=-1,
+                                    right='',
+                                    multiplier=''):
+        security = self.superSymbol(secType=secType, symbol=symbol, currency=currency,
+                        exchange=exchange, primaryExchange=primaryExchange,
+                        expiry=expiry, strike=strike, right=right, multiplier=multiplier)
+        self.request_data(ReqData.reqContractDetails(security))
+        if len(self.end_check_list_result) == 1:
+            for ct in self.end_check_list_result:
+                return self.end_check_list_result[ct]
+
+
+        
     def request_historical_data(self, security,
                                         barSize,
                                         goBack,
-                                        endTime='default',
-                                        whatToShow=None,
+                                        endTime='',
+                                        whatToShow='',
                                         useRTH=1,
                                         formatDate=2,
-                                        waitForFeedbackinSeconds=30):
-        if endTime=='default':
-            endTime=self.get_datetime()
-        tmp=ReqHistClass(security=security,
-                    barSize=barSize,
-                    goBack=goBack,
-                    endTime=endTime,
-                    whatToShow=whatToShow,
-                    useRTH=useRTH,
-                    formatDate=formatDate,
-                    showTimeZone=self.showTimeZone)                                    
-        self.request_data(historyData=[tmp],
-                          waitForFeedbackinSeconds=waitForFeedbackinSeconds)
-        adj_security=search_security_in_Qdata(self.qData, security,
-                                              self.logLevel)        
-        return deepcopy(self.qData.data[adj_security].hist[barSize])                                  
+                                        waitForFeedbackinSeconds=30):                                  
+        self.request_data(ReqData.reqHistoricalData(security, barSize, goBack,
+                                                    endTime, whatToShow, useRTH,
+                                                    formatDate))      
+        return self.qData.data[security].hist[barSize]                                  
             
     def symbol(self, str_security):
         self.log.notset(__name__+'::symbol:'+str_security)  
         a_security=from_symbol_to_security(str_security, self.logLevel)
         re=search_security_in_Qdata(self.qData, a_security, self.logLevel)  
-        self.build_security_in_positions(a_security, accountCode='all')
+        #self.build_security_in_positions(a_security, accountCode='all')
         return re
 
     def symbols(self, *args): 
@@ -563,99 +577,24 @@ class IBAccountManager(IBCpp.IBClient):
                     exchange=exchange, primaryExchange=primaryExchange, expiry=expiry,
                     strike=strike, right=right, multiplier=multiplier, includeExpired=includeExpired)  
         re=search_security_in_Qdata(self.qData, a_security, self.logLevel)
-        self.build_security_in_positions(a_security, accountCode='all')
+        #self.build_security_in_positions(a_security, accountCode='all')
         return re
            
-    def search_in_end_check_list(self, reqType=None, security=None, \
-                        reqId=None, notDone=None, output_version='location', allowToFail=False):
-        self.log.notset(__name__+'::search_in_end_check_list')  
-        search_result={}
-        input_list=self.end_check_list
-        if reqType!=None:
-            for ct in input_list:
-                if input_list[ct].reqType==reqType:
-                    search_result[ct]=input_list[ct]
-            input_list=search_result
-            search_result={}
             
-        if security!=None:    
-            for ct in input_list:
-                if same_security(input_list[ct].security,security):
-                    search_result[ct]=input_list[ct]
-            input_list=search_result
-            search_result={}
-                    
-        if reqId!=None:                                       
-            for ct in input_list:          
-                if input_list[ct].reqId==reqId:
-                    search_result[ct]=input_list[ct]
-            input_list=search_result
-            search_result={}
-                                        
-        if notDone!=None:                                       
-            for ct in input_list:          
-                if input_list[ct].status!='Done':
-                    search_result[ct]=input_list[ct]
-            input_list=search_result
-            search_result={}
-
-        if output_version=='location':
-            if len(input_list)==0:
-                if allowToFail==False:
-                    self.log.error(__name__+'::search_in_end_check_list: cannot\
-                    find any in self.end_check_list %s %s %i %s' %(reqType, str(security), reqId, notDone))
-                    self.end()
-                else:
-                    return None
-            elif len(input_list)==1:
-                for ct in input_list:
-                    return ct
-            else:
-                self.log.error(__name__+'::search_in_end_check_list: found too many in self.end_check_list, EXIT')
-                for ct in input_list:
-                    self.log.error(str(input_list[ct]))
-                self.end()
-        elif output_version=='list':
-            return input_list
-        else:
-            self.log.error(__name__+'::search_in_end_check_list: cannot handle oupt_version='+output_version)
-            
-
-    def display_end_check_list(self):
-        self.log.info(__name__+'::display_end_check_list')
-        if len(self.end_check_list)==0:
-            self.log.info(__name__+'::display_end_check_list: EMPTY self.end_check_list')
-        else:    
-            for ct in self.end_check_list:
-                self.log.info(__name__+'::display_end_check_list: '+ str(ct)+' '+str(self.end_check_list[ct]))
-            self.log.info(__name__+'::display_end_check_list: END     #############')
-
-        
 
     def show_nextId(self):
         return self.nextId
         
     def show_real_time_price(self, security, version):
         self.log.notset(__name__+'::show_real_time_price')                          
-        adj_security=search_security_in_Qdata(self.qData,security, self.logLevel)
         version=priceNameChange[version]
-        if adj_security not in self.realTimePriceRequestedList:
-            self.request_data(realTimePrice=[adj_security],waiver=['realTimePrice'])    
-        if hasattr(self.qData.data[adj_security], version):
-            return getattr(self.qData.data[adj_security], version)
+        if security not in self.realTimePriceRequestedList:
+            self.request_data(ReqData.reqMktData(security, waiver=True))    
+        if hasattr(self.qData.data[security], version):
+            return getattr(self.qData.data[security], version)
         else:
             self.log.error(__name__+'::show_real_time_price: EXIT, cannot handle version='+version)
             self.end()
-            
-    def show_latest_price(self, security):
-        self.log.notset(__name__+'::show_latest_price')                          
-        adj_security=search_security_in_Qdata(self.qData,security, self.logLevel)
-        if self.qData.data[adj_security].last_traded<0.01:
-            self.request_data(marketSnapShot=[adj_security])
-        return self.qData.data[adj_security].last_traded    
-
-
-
 
     def create_order(self, action, amount, security, orderDetails, 
                      ocaGroup=None, ocaType=None, transmit=None, parentId=None,
@@ -808,65 +747,47 @@ class IBAccountManager(IBCpp.IBClient):
                     return
                      
     #### Request information from IB server 
+    def req_info_from_server_if_all_completed(self):
+        self.log.notset(__name__+'::req_info_from_server_if_all_completed')
+        for idx in self.end_check_list.index:
+            if self.end_check_list.loc[idx, 'status'] !='Done' and self.end_check_list.loc[idx, 'waiver'] != True:
+                return False                
+        return True
+ 
+    def request_data(self, *args):
+        self.log.notset(__name__+'::request_data')    
 
-    def request_data(self,
-                  positions  = None,
-                  accountDownload= None,
-                  reqAccountSummary = None,
-                  nextValidId= None,
-                  historyData= None,
-                  realTimePrice = None,
-                  realTimeBars=None,
-                  contractDetails= None,
-                  marketSnapShot=None,
-                  reqAllOpenOrders= None,
-                  cancelMktData=None,
-                  reqCurrentTime=None,
-                  calculateImpliedVolatility=None,
-                  waiver=None,
-                  waitForFeedbackinSeconds=30,
-                  repeat=3):
-        self.log.notset(__name__+'::request_data')                          
+        # change args to a pandas dataFrame 
+        # index is reqId
+        reqList = pd.DataFrame()
+        for ct in args:
+            ct.reqId = self.nextId
+            self.nextId += 1
+            newRow = pd.DataFrame({'reqId':ct.reqId, 'status':ct.status, 
+                                   'waiver':ct.waiver, 'reqData':ct, 
+                                   'reqType':ct.reqType}, index=[ct.reqId])
+            reqList = reqList.append(newRow)
+                      
         exit_untill_completed=0
         while(exit_untill_completed<=3):       
             if exit_untill_completed==0:
-                all_req_info=self.create_end_check_list( \
-                      positions  = positions,
-                      accountDownload= accountDownload,
-                      reqAccountSummary= reqAccountSummary,
-                      nextValidId= nextValidId,
-                      historyData= historyData,
-                      realTimePrice = realTimePrice,
-                      realTimeBars = realTimeBars,
-                      contractDetails= contractDetails,
-                      marketSnapShot= marketSnapShot,
-                      reqAllOpenOrders= reqAllOpenOrders,
-                      cancelMktData= cancelMktData,
-                      reqCurrentTime=reqCurrentTime,
-                      calculateImpliedVolatility=calculateImpliedVolatility,
-                      waiver=waiver)
-                self.req_info_from_server(all_req_info)            
+                self.req_info_from_server(reqList)            
             elif exit_untill_completed>=1:
                 self.log.error(__name__+'::request_data: Re-send request info')
-                #self.display_end_check_list()
-                new_list=self.search_in_end_check_list(notDone=True,output_version='list')
-                self.log.debug(__name__+'::request_data:NotDone in self.end_check_list')
-                for ct in new_list:
-                    self.log.debug(__name__+'::reqeust_data:'+str(ct)+' '+str(new_list[ct]))
-                    #print (new_list[ct].reqId)
-                    #print (new_list[ct].reqType)
-                    if new_list[ct].reqType=='realTimePrice':
-                        self.cancelMktData(new_list[ct].reqId)
-                        self.log.debug(__name__+'::request_data: cancelMktData Id='+str(new_list[ct].reqId))
+                newReqList=reqList[reqList['status'] == 'submitted']
+                self.log.debug(__name__+'::request_data: reqData is not successful')
+                for idx in newReqList.index:
+                    self.log.debug(__name__+'::reqeust_data:'+str(newReqList.loc[idx]['reqData']))
+
                 # re-send request info                
-                self.req_info_from_server(new_list)  
+                self.req_info_from_server(newReqList)  
                 
             # continuously check if all requests have received responses 
             while (self.req_info_from_server_if_all_completed()==False) :
                 if self.runMode!= 'test_mode':
                     time.sleep(0.1)            
                 self.processMessages()
-                if self.check_timer(waitForFeedbackinSeconds)==True:
+                if self.check_timer(self.waitForFeedbackinSeconds)==True:
                     break
             
             # if receive data successfull, exit to loop
@@ -883,339 +804,152 @@ class IBAccountManager(IBCpp.IBClient):
                 exit_untill_completed=exit_untill_completed+1
   
         # if tried many times, exit; if successfully done, return
-        if exit_untill_completed>repeat:
+        if exit_untill_completed > self.repeat:
             self.log.error(__name__+'::request_data: Tried many times, but Failed')
             self.end()
         self.log.debug(__name__+'::req_info_from_server: COMPLETED')
-
-
-    def create_end_check_list(self,
-                      positions  = None,
-                      accountDownload= None,
-                      reqAccountSummary =None, 
-                      nextValidId= None,
-                      historyData= None,
-                      realTimePrice = None,
-                      realTimeBars = None,
-                      contractDetails= None,
-                      marketSnapShot=None,
-                      reqAllOpenOrders =None,
-                      cancelMktData = None,
-                      reqCurrentTime= None,
-                      calculateImpliedVolatility= None,
-                      waiver=None):
-        self.log.notset(__name__+'::create_end_check_list')                          
-        end_check_list={}
-        end_check_list_id=0
-        if positions  == True:
-            end_check_list[end_check_list_id]=\
-                    EndCheckListClass(status='Created',
-                                      reqType='positions')  
-            end_check_list_id=end_check_list_id+1
-        if accountDownload!=None and accountDownload !=False:
-            if type(accountDownload)==type(''):
-                end_check_list[end_check_list_id]=\
-                        EndCheckListClass(status='Created',
-                                          reqType='accountDownload',
-                                          input_parameters=accountDownload)
-                end_check_list_id=end_check_list_id+1
-            elif type(accountDownload)==type((0,0)):
-                end_check_list[end_check_list_id]=\
-                        EndCheckListClass(status='Created',
-                                          reqType='reqAccountSummary',
-                                          input_parameters='all')
-                end_check_list_id=end_check_list_id+1
-            else:
-                self.log.error(__name__+'::create_end_check_list: EXIT, cannot\
-                handle accountDownload='+str(accountDownload))
-                self.end()
-        if reqAccountSummary!=None and reqAccountSummary !=False:
-            end_check_list[end_check_list_id]=\
-                    EndCheckListClass(status='Created',
-                                      reqType='reqAccountSummary',
-                                      input_parameters='all')
-            end_check_list_id=end_check_list_id+1
-
-        if nextValidId== True:
-            end_check_list[end_check_list_id]=\
-                    EndCheckListClass(status='Created',
-                                      reqType='nextValidId')            
-            end_check_list_id=end_check_list_id+1
-        if historyData!=None and historyData!=False: 
-            if type(historyData[0])==tuple:
-                reqHistList=[]
-                for ct in historyData:
-                    tmp=ReqHistClass(security=ct[0],
-                                     barSize=ct[1],
-                                     goBack=ct[2],
-                                     endTime=self.get_datetime())
-                    reqHistList.append(tmp)
-            else:
-                reqHistList=historyData
-            for ct in reqHistList:             
-                end_check_list[end_check_list_id]=EndCheckListClass(\
-                                            status='Created',
-                                            input_parameters=ct,
-                                            return_result=pd.DataFrame(),
-                                            reqType='historyData',
-                                            security=ct.security)                                            
-                end_check_list_id=end_check_list_id+1
-        if realTimePrice != False and realTimePrice != None: 
-            if realTimePrice!='Default':            
-                for security in realTimePrice:
-                    end_check_list[end_check_list_id]=EndCheckListClass(\
-                                                    status='Created',
-                                                    input_parameters=security,
-                                                    reqType='realTimePrice',
-                                                    security=security)
-                    end_check_list_id=end_check_list_id+1
-            else:
-                for security in self.qData.data:
-                    end_check_list[end_check_list_id]=EndCheckListClass(\
-                                                    status='Created',
-                                                    input_parameters=security,
-                                                    reqType='realTimePrice',
-                                                    security=security)
-                    end_check_list_id=end_check_list_id+1
-
-        if realTimeBars != False and realTimeBars != None: 
-            if realTimeBars!='Default':
-                if type(realTimeBars)!=list:
-                    end_check_list[end_check_list_id]=EndCheckListClass(\
-                                                    status='Created',
-                                                    input_parameters=realTimeBars,
-                                                    reqType='realTimeBars',
-                                                    security=realTimeBars)
-                    end_check_list_id=end_check_list_id+1
-                else:                    
-                    for security in realTimeBars:
-                        end_check_list[end_check_list_id]=EndCheckListClass(\
-                                                        status='Created',
-                                                        input_parameters=security,
-                                                        reqType='realTimeBars',
-                                                        security=security)
-                        end_check_list_id=end_check_list_id+1
-            else:
-                for security in self.qData.data:
-                    end_check_list[end_check_list_id]=EndCheckListClass(\
-                                                    status='Created',
-                                                    input_parameters=security,
-                                                    reqType='realTimeBars',
-                                                    security=security)
-                    end_check_list_id=end_check_list_id+1
-                
-        if contractDetails!= False and contractDetails!= None:
-            for security in contractDetails:
-                end_check_list[end_check_list_id]=EndCheckListClass(\
-                                                status='Created',
-                                                input_parameters=security,
-                                                return_result=pd.DataFrame(),
-                                                reqType='contractDetails',
-                                                security=security)
-                end_check_list_id=end_check_list_id+1
-        if marketSnapShot != False and marketSnapShot != None:             
-            for security in marketSnapShot:
-                end_check_list[end_check_list_id]=EndCheckListClass(\
-                                                status='Created',
-                                                input_parameters=security,
-                                                reqType='marketSnapShot',
-                                                security=security)
-                end_check_list_id=end_check_list_id+1
-        if reqAllOpenOrders != None:             
-            end_check_list[end_check_list_id]=EndCheckListClass(\
-                                            status='Created',
-                                            reqType='reqAllOpenOrders')
-            end_check_list_id=end_check_list_id+1
-
-        if cancelMktData != None:   
-            for security in cancelMktData:
-                end_check_list[end_check_list_id]=EndCheckListClass(\
-                                                status='Created',
-                                                input_parameters=security,
-                                                reqType='cancelMktData',
-                                                security=security)
-                end_check_list_id=end_check_list_id+1
-        if reqCurrentTime != None:
-            end_check_list[end_check_list_id]=EndCheckListClass(\
-                                            status='Created',
-                                            reqType='reqCurrentTime')
-            end_check_list_id=end_check_list_id+1 
         
-        if calculateImpliedVolatility !=None:
-            security,oPrice, uPrice=calculateImpliedVolatility
-            end_check_list[end_check_list_id]=EndCheckListClass(\
-                                            status='Created',
-                                            input_parameters=(oPrice, uPrice),
-                                            reqType='calculateImpliedVolatility',
-                                            security=security)
-            
 
-        if waiver!=None and waiver!=False:
-            for ct in waiver:
-                Found=False
-                for item in end_check_list:
-                    if end_check_list[item].reqType==ct:
-                        Found=True
-                        end_check_list[item].waiver=True
-                if Found==False:
-                    self.log.error(__name__+'::create_end_check_list: EXIT, cannot handle waiver='+str(ct))
-                    self.end()            
-        return end_check_list
-            
-    def req_info_from_server(self, list_requests):
+        
+    def req_info_from_server(self, reqData):
         self.log.debug(__name__+'::req_info_from_server: Request the following info to server')
-        self.end_check_list=list_requests
+        self.end_check_list = reqData
+        self.end_check_list_result = {}
         
-        for ct in self.end_check_list:
-            self.end_check_list[ct].status='Submitted'
-            if self.end_check_list[ct].reqType=='positions':
+        for idx in self.end_check_list.index:
+            self.end_check_list.loc[idx, 'status']='Submitted'
+            if self.end_check_list.loc[idx, 'reqType'] == 'reqPositions':
                 self.log.debug(__name__+'::req_info_from_server: requesting open positions info from IB')
                 self.reqPositions()                            # request open positions
-            elif self.end_check_list[ct].reqType=='reqCurrentTime':
+
+            elif self.end_check_list.loc[idx, 'reqType'] == 'reqCurrentTime':
                 self.log.debug(__name__+'::req_info_from_server: requesting IB server time')
                 self.reqCurrentTime()                            # request open positions
-            elif self.end_check_list[ct].reqType=='reqAllOpenOrders':
-                self.log.debug(__name__+'::req_info_from_server: requesting allOpenOrders from IB')
-                self.reqAllOpenOrders()                            # request all open orders
-            elif self.end_check_list[ct].reqType=='accountDownload':
-                self.log.debug(__name__+'::req_info_from_server: requesting to update account=%s info from IB' %(self.end_check_list[ct].input_parameters,))
-                self.reqAccountUpdates(True,self.end_check_list[ct].input_parameters)  # Request to update account info
-            elif self.end_check_list[ct].reqType=='reqAccountSummary':
-                #self.log.error(__name__+'::req_info_from_server: EXIT, reqAccountSummary is not ready')
-                #self.end()
-                self.log.debug(__name__+'::req_info_from_server: reqAccountSummary account=%s, reqId=%i' %(self.end_check_list[ct].input_parameters,self.nextId))
-                self.reqAccountSummary(self.nextId, 'All', 'TotalCashValue,GrossPositionValue,NetLiquidation')                               
-                self.end_check_list[ct].reqId=self.nextId                                
-                self.nextId += 1  # Prepare for next request
 
-            elif self.end_check_list[ct].reqType=='nextValidId':                
-                self.log.debug(__name__+'::req_info_from_server: requesting nextValidId')
-                self.nextId=None                
+            elif self.end_check_list.loc[idx, 'reqType'] == 'reqAllOpenOrders':
+                self.log.debug(__name__+'::req_info_from_server: requesting reqAllOpenOrders from IB')
+                self.reqAllOpenOrders()                            # request all open orders
+
+            elif self.end_check_list.loc[idx, 'reqType'] == 'reqAccountUpdates':
+                accountCode = self.end_check_list.loc[idx, 'reqData'].param['accountCode']
+                subscribe = self.end_check_list.loc[idx, 'reqData'].param['subscribe']
+                self.log.debug(__name__+'::req_info_from_server: requesting to update account=%s info from IB' %(accountCode,))
+                self.reqAccountUpdates(subscribe, accountCode )  # Request to update account info
+
+            elif self.end_check_list.loc[idx, 'reqType'] == 'reqAccountSummary':
+                reqId = int(self.end_check_list.loc[idx, 'reqId'])
+                group = self.end_check_list.loc[idx, 'group']
+                tag = self.end_check_list.loc[idx, 'tag']
+                self.log.debug(__name__+'::req_info_from_server: reqAccountSummary account=%s, reqId=%i' %(group, reqId))
+                self.reqAccountSummary(reqId, group, tag)                               
+
+            elif self.end_check_list.loc[idx, 'reqType'] == 'reqIds':                
+                self.log.debug(__name__+'::req_info_from_server: requesting reqIds')
+                self.nextId = None                
                 self.reqIds(0)
-            elif self.end_check_list[ct].reqType=='historyData':
-                self.log.debug(__name__ + '::req_info_from_server: Req hist: %s' %(self.end_check_list[ct].input_parameters, ))                   
-                self.end_check_list[ct].reqId=self.nextId 
+                
+            elif self.end_check_list.loc[idx, 'reqType'] == 'reqHistoricalData':
+                reqId = int(self.end_check_list.loc[idx, 'reqId'])
+                security = self.end_check_list.loc[idx, 'reqData'].param['security']
+                endTime = self.end_check_list.loc[idx, 'reqData'].param['endTime']
+                goBack = self.end_check_list.loc[idx, 'reqData'].param['goBack']
+                barSize = self.end_check_list.loc[idx, 'reqData'].param['barSize']
+                whatToShow = self.end_check_list.loc[idx, 'reqData'].param['whatToShow']
+                useRTH = self.end_check_list.loc[idx, 'reqData'].param['useRTH']
+                formatDate = self.end_check_list.loc[idx, 'reqData'].param['formatDate']
+                self.qData.data[security].hist[barSize] = pd.DataFrame()
+                self.log.debug(__name__ + '::req_info_from_server: Req hist: %s %s' %(str(self.end_check_list.loc[idx, 'reqData'].param), str(security)))                   
                 self.receivedHistFlag=False
-                self.reqHistoricalData(self.nextId, 
-                                       create_contract(self.end_check_list[ct].input_parameters.security),
-                                       self.end_check_list[ct].input_parameters.endTime,
-                                       self.end_check_list[ct].input_parameters.goBack,
-                                       self.end_check_list[ct].input_parameters.barSize,
-                                       self.end_check_list[ct].input_parameters.whatToShow,
-                                       self.end_check_list[ct].input_parameters.useRTH,
-                                       self.end_check_list[ct].input_parameters.formatDate)
-                self.nextId += 1  # Prepare for next request
+                self.reqHistoricalData(reqId, 
+                                       create_contract(security),
+                                       endTime,
+                                       goBack,
+                                       barSize,
+                                       whatToShow,
+                                       useRTH,
+                                       formatDate)
                 if self.runMode!= 'test_mode':
                     time.sleep(0.1)
 
-            elif self.end_check_list[ct].reqType=='realTimePrice':
-                self.log.notset(__name__+'::req_info_from_server: '+str(self.end_check_list[ct]))
-
-                sec=search_security_in_Qdata(self.qData,self.end_check_list[ct].security, self.logLevel)              
+            elif self.end_check_list.loc[idx, 'reqType'] == 'reqMktData':
+                reqId = int(self.end_check_list.loc[idx, 'reqId'])
+                security = self.end_check_list.loc[idx, 'reqData'].param['security']
+                genericTickList = self.end_check_list.loc[idx, 'reqData'].param['genericTickList']
+                snapshot = self.end_check_list.loc[idx, 'reqData'].param['snapshot']                              
+                self.log.debug(__name__+'::req_info_from_server: request realTimePrice %s %s %s' %(str(security), genericTickList, str(snapshot)))
+              
                 # put security and reqID in dictionary for fast acess
                 # it is keyed by both security and reqId
-                self.realTimePriceRequestedList[sec]=self.nextId
-                self.realTimePriceRequestedList[self.nextId]=sec
+                self.realTimePriceRequestedList[security] = reqId
+                self.realTimePriceRequestedList[reqId] = security
 
                 if self.runMode!='test_run':               
-                    self.qData.data[sec].ask_price=-1 # None: not requested yet, 
-                    self.qData.data[sec].bid_price=-1 #-1: requested but no real time
-                    self.qData.data[sec].ask_size=-1
-                    self.qData.data[sec].bid_size=-1
-                    self.qData.data[sec].last_traded=-1
-                self.reqMktData(self.nextId, create_contract(self.end_check_list[ct].security),'233',False) # Send market data requet to IB server
-                self.end_check_list[ct].reqId=self.nextId                                
-                self.nextId += 1  # Prepare for next request
+                    self.qData.data[security].ask_price=-1 # None: not requested yet, 
+                    self.qData.data[security].bid_price=-1 #-1: requested but no real time
+                    self.qData.data[security].ask_size=-1
+                    self.qData.data[security].bid_size=-1
+                    self.qData.data[security].last_traded=-1
+                self.reqMktData(reqId, create_contract(security),
+                                genericTickList,snapshot) # Send market data requet to IB server
             
-            elif self.end_check_list[ct].reqType=='cancelMktData':
-                sec=search_security_in_Qdata(self.qData,self.end_check_list[ct].security, self.logLevel)
-                reqId=self.realTimePriceRequestedList[sec]
+            elif self.end_check_list.loc[idx, 'reqType'] == 'cancelMktData':
+                security = self.end_check_list.loc[idx, 'reqData'].param['security']
+                reqId = self.realTimePriceRequestedList[security]
                 self.log.debug(__name__+'::req_info_from_server: cancelMktData: ' 
-                            +str(self.end_check_list[ct].security) + ' '
+                            +str(security) + ' '
                             +'reqId='+str(reqId))
                 self.cancelMktData(reqId)
-                self.qData.data[sec].ask_price=-1
-                self.qData.data[sec].bid_price=-1
-                self.qData.data[sec].ask_size=-1
-                self.qData.data[sec].bid_size=-1
+                self.qData.data[security].ask_price=-1
+                self.qData.data[security].bid_price=-1
+                self.qData.data[security].ask_size=-1
+                self.qData.data[security].bid_size=-1
+                self.qData.data[security].size=-1
                            
-            elif self.end_check_list[ct].reqType=='realTimeBars':
-                sec=self._save_info(self.end_check_list[ct].security)
-                self.reqRealTimeBars(self.nextId, 
-                                     create_contract(self.end_check_list[ct].security),
-                                     5, 'ASK', False) # Send market data requet to IB server
-                self.end_check_list[ct].reqId=self.nextId                                
+            elif self.end_check_list.loc[idx, 'reqType'] == 'reqRealTimeBars':
+                reqId = int(self.end_check_list.loc[idx, 'reqId'])
+                security = self.end_check_list.loc[idx, 'reqData'].param['security']
+                barSize = self.end_check_list.loc[idx, 'reqData'].param['barSize']
+                whatToShow = self.end_check_list.loc[idx, 'reqData'].param['whatToShow']
+                useRTH = self.end_check_list.loc[idx, 'reqData'].param['useRTH']
+                self.realTimePriceRequestedList[security] = reqId
+                self.realTimePriceRequestedList[reqId] = security
                 self.log.debug(__name__+'::req_info_from_server:requesting realTimeBars: ' 
-                            +str(self.end_check_list[ct].security) + ' '
-                            +'reqId='+str(self.nextId))
-                self.nextId += 1  # Prepare for next request
-            elif self.end_check_list[ct].reqType=='contractDetails':
-                self.reqContractDetails(self.nextId, create_contract(self.end_check_list[ct].security))
-                self.end_check_list[ct].reqId=self.nextId                                
+                            +str(security) + ' '
+                            +'reqId='+str(reqId))
+                self.reqRealTimeBars(reqId, 
+                                     create_contract(security),
+                                     barSize, whatToShow, useRTH) # Send market data requet to IB server
+                               
+            elif self.end_check_list.loc[idx, 'reqType'] == 'reqContractDetails':
+                reqId = int(self.end_check_list.loc[idx, 'reqId'])
+                security = self.end_check_list.loc[idx, 'reqData'].param['security']
+                self.reqContractDetails(reqId, create_contract(security)) 
+                self.end_check_list_result[reqId] = pd.DataFrame()                             
                 self.log.debug(__name__+'::req_info_from_server: reqesting contractDetails '\
-                                    +str(self.end_check_list[ct])+' reqId='+str(self.nextId))
-                self.nextId += 1  # Prepare for next request
-            elif self.end_check_list[ct].reqType=='marketSnapShot':
-                sec=self.end_check_list[ct].security
-                search_security_in_Qdata(self.qData,sec, self.logLevel).reqMarketSnapShotId=self.nextId
-                self.reqMktData(self.nextId, create_contract(self.end_check_list[ct].security),'',True) # Send market data requet to IB server
-                self.end_check_list[ct].reqId=self.nextId                                
-                self.log.debug(__name__+'::req_info_from_server: requesting market snapshot: '+str(self.end_check_list[ct].security)+' reqId='+str(self.nextId))
-                self.nextId += 1  # Prepare for next request
-            elif self.end_check_list[ct].reqType=='calculateImpliedVolatility':
+                                    +str(security)+' reqId='+str(reqId))
+
+            elif self.end_check_list.loc[idx, 'reqType'] == 'calculateImpliedVolatility':
+                reqId = int(self.end_check_list.loc[idx, 'reqId'])
+                security = float(self.end_check_list.loc[idx, 'reqData'].param['security'])
+                optionPrice = float(self.end_check_list.loc[idx, 'reqData'].param['optionPrice'])
+                underPrice = float(self.end_check_list.loc[idx, 'reqData'].param['underPrice'])
+
                 # put security and reqID in dictionary for fast acess
                 # it is keyed by both security and reqId
-                self.realTimePriceRequestedList[self.end_check_list[ct].security]=self.nextId
-                self.realTimePriceRequestedList[self.nextId]=self.end_check_list[ct].security
+                self.realTimePriceRequestedList[security] = reqId
+                self.realTimePriceRequestedList[reqId] = security
 
-                self.calculateImpliedVolatility(self.nextId, 
-                create_contract(self.end_check_list[ct].security), 
-                self.end_check_list[ct].input_parameters[0], 
-                self.end_check_list[ct].input_parameters[1])
-
-                self.end_check_list[ct].reqId=self.nextId                                
-                self.log.info(__name__+'::req_info_from_server: calculateImpliedVolatility: '\
-                +str(self.end_check_list[ct].security)+' reqId='+str(self.nextId)\
-                +' optionPrice='+str(self.end_check_list[ct].input_parameters[0])\
-                +' uderlyingPrice='+str(self.end_check_list[ct].input_parameters[1]))
-                self.nextId += 1  # Prepare for next request               
+                self.calculateImpliedVolatility(reqId, 
+                                                create_contract(security), 
+                                                optionPrice, 
+                                                underPrice)                               
+                self.log.debug(__name__+'::req_info_from_server: calculateImpliedVolatility: '\
+                +str(security)+' reqId='+str(reqId)\
+                +' optionPrice='+str(optionPrice)\
+                +' underPrice='+str(underPrice))
+              
             else:
-                self.log.error(__name__+'::req_info_from_server: EXIT, cannot handle reqType='+self.end_check_list[ct].reqType)
+                self.log.error(__name__+'::req_info_from_server: EXIT, cannot handle reqType=' + self.end_check_list.loc[idx, 'reqType'])
                 self.end()
-
-        for ct in self.end_check_list:
-            self.log.debug(__name__+'::req_info_from_server:'+str(ct)+' '+str(self.end_check_list[ct]))        
         self.set_timer()
-
-    def req_info_from_server_if_all_completed(self):
-        for ct in self.end_check_list:
-            self.log.notset(__name__+'::req_info_from_server_if_all_completed: '+str(self.end_check_list[ct]))
-            if self.end_check_list[ct].reqType=='realTimePrice':
-                sec= self.end_check_list[ct].security
-                if sec.secType!='IND':
-                    if self.qData.data[search_security_in_Qdata(self.qData,sec, self.logLevel)].ask_price>=0.01 \
-                            and self.qData.data[search_security_in_Qdata(self.qData,sec, self.logLevel)].bid_price>=0.01:
-                        self.end_check_list[ct].status='Done'
-                else: # index will never received bid ask price. only last_traded
-                    if self.qData.data[search_security_in_Qdata(self.qData,sec, self.logLevel)].last_traded>=0.01:
-                        self.end_check_list[ct].status='Done'
-                    
-            elif self.end_check_list[ct].reqType=='realTimeBars':
-                self.end_check_list[ct].status='Done'
-            elif self.end_check_list[ct].reqType=='reqCurrentTime':
-                if self.recordedServerUTCtime!=None:
-                    self.end_check_list[ct].status='Done'
-            elif self.end_check_list[ct].reqType=='nextValidId':
-                if self.nextValidId!=None:
-                    self.end_check_list[ct].status='Done'
-            elif self.end_check_list[ct].reqType=='reqAllOpenOrders':
-                self.end_check_list[ct].status='Done'
-            elif self.end_check_list[ct].reqType=='cancelMktData':
-                self.end_check_list[ct].status='Done'
-
-        for ct in self.end_check_list:
-            if self.end_check_list[ct].status!='Done' and self.end_check_list[ct].waiver!=True:
-                return False                
-        return True
- 
-
+        

@@ -19,7 +19,8 @@ def initialize(context):
     
 def handle_data(context, data):
     print (get_datetime().strftime("%Y-%m-%d %H:%M:%S %Z"))
-    print ("ask_price=",show_real_time_price(symbol('CASH,EUR,USD'),'ask_price'))
+    #print ("ask_price=",show_real_time_price(symbol('CASH,EUR,USD'),'ask_price'))
+    print ("ask_price=", show_real_time_price(symbol('IND,SPX,USD'), 'ask_price'))
 
 
 

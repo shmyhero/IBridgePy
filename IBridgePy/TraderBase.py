@@ -3,7 +3,7 @@ import datetime as dt
 import time, pytz
 import pandas as pd
 import BasicPyLib.simpleLogger as simpleLogger
-from IBridgePy.quantopian import DataClass, ContextClass,QDataClass
+from IBridgePy.quantopian import DataClass, ContextClass,QDataClass, ReqData
 from IBridgePy.IBAccountManager import IBAccountManager
 from IBridgePy.quantopian import calendars,time_rules
 from BasicPyLib.handle_calendar import nth_trading_day_of_month,nth_trading_day_of_week
@@ -35,7 +35,7 @@ class Trader(IBAccountManager):
         maxSaveTime: max timeframe to be saved in price_size_last_matrix for TickTrader
 
         """ 
-        self.versionNumber = 1.20170920
+        self.versionNumber = 2.20171016
         self.accountCode=accountCode
         self.context = ContextClass(accountCode) 
         self.qData=None          
@@ -73,7 +73,7 @@ class Trader(IBAccountManager):
         
         self.stime_previous=None
             
-        self.nextId = None         # nextValidId, all request will use the same series
+        self.nextId = 1         # nextValidId, all request will use the same series
                 
         self.scheduledFunctionList=[]  # record all of user scheduled function conditions
         self.runMode = None        # runMode = 'test_run', =None in other cases
@@ -131,27 +131,28 @@ class Trader(IBAccountManager):
         # for test_run mode only
         self.orderIdListToBeFilled=set()        
         
-       # Prepare log
+        # Prepare log
         self.todayDateStr = time.strftime("%Y-%m-%d")
         self.log = simpleLogger.SimpleLoggerClass(filename = 
-        'TraderLog_' + self.todayDateStr + '.txt', logLevel = self.logLevel)    
+        'TraderLog_' + self.todayDateStr + '.txt', logLevel = self.logLevel)  
+        
+        # userLog is for the funciton of record (). User will use it for any reason.
+        self.dateTimeStr = time.strftime("%Y_%m_%d_%H_%M_%S")
+        self.userLog = simpleLogger.SimpleLoggerClass(filename = 
+        'userLog_' + self.dateTimeStr + '.txt', logLevel = 'NOTSET', addTime=False)    
+
         self.log.notset(__name__+'::setup_trader')   
         
     def initialize_Function(self):
         self.log.notset(__name__+'::initialize_Function')
+        self.log.info('IBridgePy version %s' %(str(self.versionNumber),))
         self.qData=QDataClass(self)
-        self.request_data(
-                  positions  = True,
-                  reqCurrentTime = True,
-                  nextValidId= True,
-                  waitForFeedbackinSeconds=self.waitForFeedbackinSeconds,
-                  repeat=self.repeat)
-        self.request_data(
-                  accountDownload= self.accountCode,
-                  reqAccountSummary= False,
-                  reqAllOpenOrders =True,
-                  waitForFeedbackinSeconds=self.waitForFeedbackinSeconds,
-                  repeat=self.repeat)
+        self.request_data(ReqData.reqPositions(),
+                          ReqData.reqCurrentTime(),
+                          ReqData.reqIds())
+        self.request_data(ReqData.reqAccountUpdates(True, self.accountCode),
+                          ReqData.reqAllOpenOrders())
+
         self.initialize_quantopian(self.context) # function name was passed in.
 
         self.log.info('####    Starting to initialize trader    ####')  

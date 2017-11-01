@@ -27,8 +27,8 @@ def search_security_in_file(secType, symbol, param, waive=False):
                 if type(exchange) == float:
                     if secType == 'STK':
                         return 'SMART'
-                    #else:
-                    #    error_messages(4, secType + ' ' + symbol + ' ' + param)
+                    else:
+                        error_messages(4, secType + ' ' + symbol + ' ' + param)
                 else:
                     return exchange
             elif param=='primaryExchange':
@@ -278,14 +278,13 @@ class Security(object):
         if self.secType=='STK' or self.secType=='IND' or self.secType=='CFD':
             string_output=self.secType+','+self.symbol+','+self.currency
         elif self.secType=='FUT':
-            string_output='FUTURES,'+self.symbol+','+self.currency+','+str(self.expiry)
+            string_output='FUT,'+self.symbol+','+self.currency+','+str(self.expiry)
         elif self.secType=='CASH':
             string_output='CASH,'+self.symbol+','+self.currency
         elif self.secType=='OPT':
-            string_output='OPTION,'+self.symbol+','+self.currency+','+str(self.expiry)+','+str(self.strike)+','+self.right+','+str(self.multiplier)
+            string_output='OPT,'+self.symbol+','+self.currency+','+str(self.expiry)+','+str(self.strike)+','+self.right+','+str(self.multiplier)
         else:
-            print (__name__+'::security: EXIT, cannot handle secType=',self.secType)
-            exit()
+            string_output=self.secType+','+self.symbol+','+self.currency
         return string_output
         
 class ContextClass(PrintableClass):
@@ -304,7 +303,7 @@ class PortofolioClass(PrintableClass):
         self.capital_used = capital_used
         self.cash = cash
         self.pnl = pnl
-        self.positions = {}
+        self.positions = Positions()
         self.orderStatusBook= {}
         self.portfolio_value = portfolio_value
         self.positions_value = positions_value
@@ -313,9 +312,18 @@ class PortofolioClass(PrintableClass):
         self.start_date = start_date
         self.performanceTracking={} #key: orderRef
         self.virtualHoldings={} # to calculate strategy balance after an order is filled
-        
+
+class Positions(dict):
+    '''
+    Learned from Quantopian
+    When there is no position, it is an empty dict.
+    When key is missing, it creates an instance.
+    '''
+    def __missing__(self, key):
+        return PositionClass()
+
 class PositionClass(PrintableClass):
-    def __init__(self, amount=0, cost_basis=0.0, last_sale_price=None, sid=None, accountCode=None):
+    def __init__(self, amount=0, cost_basis=0.0, last_sale_price=0.0, sid=None, accountCode=None):
         self.amount = amount
         self.cost_basis=cost_basis
         self.last_sale_price = last_sale_price
@@ -387,20 +395,20 @@ class QDataClass(object):
             print (__name__+'::history: EXIT, cannot handle frequency=%s'%(str(frequency,)))
             exit()
         if type(security)!=list:
-            return self.history_one(security, fields, goBack, frequency)
+            return self.history_one(security, fields, goBack, frequency).tail(bar_count)
 
         else:
             if type(fields)==str:
                 ans={}
                 for sec in security:
-                    ans[sec]=self.history_one(sec, fields, goBack, frequency)
+                    ans[sec]=self.history_one(sec, fields, goBack, frequency).tail(bar_count)
                 return pd.DataFrame(ans)
             else:
                 ans={}
                 for fld in fields:
                     ans[fld]={}
                     for sec in security:
-                        ans[fld][sec]=self.history_one(sec, fld, goBack, frequency)
+                        ans[fld][sec]=self.history_one(sec, fld, goBack, frequency).tail(bar_count)
                 return pd.Panel(ans)
                 
         
@@ -538,7 +546,7 @@ class OrderClass(object):
         return tp
 
 
-class ReqHistClass(object):
+class ReqHistClass_ToBeDeleted(object):
     def __init__(self,
                     security,
                     barSize,
@@ -570,7 +578,7 @@ class ReqHistClass(object):
         self.endTime=self.endTime.astimezone(tz=pytz.utc)
         self.endTime = dt.datetime.strftime(self.endTime,"%Y%m%d %H:%M:%S %Z") #datatime -> string
         if self.whatToShow==None:
-            if security.secType in ['STK','FUT', 'IND']:
+            if security.secType in ['STK','FUT', 'IND', 'BOND']:
                 self.whatToShow='TRADES'
             elif security.secType in ['CASH', 'OPT', 'CFD']:
                 self.whatToShow='ASK'
@@ -579,39 +587,15 @@ class ReqHistClass(object):
                 security.secType='+self.security.secType)
                 exit()                               
         
-#    def __str__(self):
-#        return str(self.security)+' barSize='+str(self.barSize)\
-#        +' goBack='+str(self.goBack)\
-#        +' endTime='+str(dt.datetime.strptime(self.endTime,"%Y%m%d %H:%M:%S %Z").astimezone(self.showTimeZone))+' whatToShow='+str(self.whatToShow)\
-#        +' useRTH='+str(self.useRTH)+' formatData='+str(self.formatDate)
     def __str__(self):
         return str(self.security)+' barSize='+str(self.barSize)\
         +' goBack='+str(self.goBack)\
         +' endTime='+str(self.endTime)+' whatToShow='+str(self.whatToShow)\
         +' useRTH='+str(self.useRTH)+' formatData='+str(self.formatDate)
-
-
-class RequestDataClass(object):
-    def __init__(self,
-                  positions  = None,
-                  accountDownload= None,
-                  reqAccountSummary = None,
-                  nextValidId= None,
-                  historyData= None,
-                  realTimePrice = None,
-                  realTimeBars=None,
-                  contractDetails= None,
-                  marketSnapShot=None,
-                  reqAllOpenOrders= None,
-                  cancelMktData=None,
-                  reqCurrentTime=None,
-                  reqOptionGreeks=None):
-        pass
-        
-        
+              
 class EndCheckListClass(object):
     def __init__(self,
-                 status=None,
+                 status='created',
                  reqId=None,
                  input_parameters=None,
                  return_result=None,
@@ -634,6 +618,144 @@ class EndCheckListClass(object):
         else:
             output=self.reqType+' reqId='+str(self.reqId) +' '+self.status           
         return output
+
+class ReqData(object):
+    class reqDataBase(object): 
+        def setup(self, reqId=-1, status='Created', reqType='', waiver=False):
+            self.status = status
+            self.reqId = reqId
+            self.reqType = reqType
+            self.waiver = waiver
+            self.param = {}
+            self.return_result = None
+         
+        def __str__(self):
+            if len(self.param) != 0:
+                ans = ''
+                for ct in self.param:
+                    ans += ct + ':' + str(self.param[ct]) + ' '
+            else:
+                ans = ''
+            return '%s %s %s %s %s' %(str(self.reqId), self.status, 
+                                      str(self.waiver), self.reqType, ans)
+               
+    class reqPositions(reqDataBase):
+        def __init__(self):
+            self.setup()
+            self.reqType = 'reqPositions'
+                                   
+    class reqAccountUpdates(reqDataBase):
+        def __init__(self, subscribe, accountCode):
+            self.setup()
+            self.reqType = 'reqAccountUpdates'
+            self.param['subscribe'] = subscribe
+            self.param['accountCode'] = accountCode
+            
+    class reqAccountSummary(reqDataBase):
+        def __init__(self, group='all', tag='TotalCashValue,GrossPositionValue,NetLiquidation'):
+            self.setup()  
+            self.reqType = 'reqAccountSummary'
+            self.param['group'] = group
+            self.param['tag'] = tag   
+            
+    class reqIds(reqDataBase):
+        def __init__(self):
+            self.setup()
+            self.reqType = 'reqIds'
+
+    class reqAllOpenOrders(reqDataBase):
+        def __init__(self):
+            self.setup()
+            self.reqType = 'reqAllOpenOrders'
+
+    class reqCurrentTime(reqDataBase):
+        def __init__(self):
+            self.setup()
+            self.reqType = 'reqCurrentTime'
+            
+            
+    class reqHistoricalData(reqDataBase):
+        def __init__(self, security,
+                            barSize,
+                            goBack,
+                            endTime='',
+                            whatToShow='',
+                            useRTH=1,
+                            formatDate=2):
+            self.setup()
+            self.reqType = 'reqHistoricalData'
+            self.param['security'] = security
+
+            # 1 sec, 5 secs,15 secs,30 secs,1 min,2 mins,3 mins,5 mins,
+            # 15 mins,30 mins,1 hour,1 day
+            self.param['barSize'] = barSize
+                    
+            self.param['goBack'] = goBack
+            self.param['endTime'] = endTime
+            
+            #TRADES,MIDPOINT,BID,ASK,BID_ASK,HISTORICAL_VOLATILITY,
+            # OPTION_IMPLIED_VOLATILITY
+            self.param['whatToShow'] = whatToShow
+            
+            self.param['useRTH'] = useRTH
+            self.param['formatDate'] = formatDate
+
+            #all request datetime will be switched to UTC then submit to IB
+            if endTime != '':
+                if not endTime.tzinfo:
+                    endTime = pytz.timezone('US/Eastern').localize(endTime)
+                else:
+                    endTime = endTime.astimezone(tz=pytz.utc)
+                self.param['endTime'] = dt.datetime.strftime(endTime, "%Y%m%d %H:%M:%S %Z") #datatime -> string
+
+            if whatToShow=='':
+                if security.secType in ['STK','FUT', 'IND', 'BOND']:
+                    self.param['whatToShow'] = 'TRADES'
+                elif security.secType in ['CASH', 'OPT', 'CFD']:
+                    self.param['whatToShow'] = 'ASK'
+                else:
+                    print (__name__+'::reqHistoricalData: EXIT, cannot handle\
+                    security.secType=' + security.secType)
+                    exit()                               
+
+    class reqMktData(reqDataBase):
+        def __init__(self, security, genericTickList='233', snapshot=False, waiver=False):
+            self.setup()
+            self.reqType = 'reqMktData'
+            self.param['security'] = security
+            self.param['genericTickList'] = genericTickList
+            self.param['snapshot'] = snapshot
+            self.waiver = waiver
+
+    class cancelMktData(reqDataBase):
+        def __init__(self, security):
+            self.setup()
+            self.reqType = 'cancelMktData'
+            self.param['security'] = security
+            self.waiver = True # IB never confirm cancelMktData
+            
+    class reqRealTimeBars(reqDataBase):
+        def __init__(self, security, barSize=5, whatToShow='ASK', useRTH=True):
+            self.setup()
+            self.reqType = 'reqRealTimeBars'
+            self.param['security'] = security
+            self.param['barSize'] = barSize
+            self.param['whatToShow'] = whatToShow
+            self.param['useRTH'] = useRTH
+
+    class reqContractDetails(reqDataBase):
+        def __init__(self, security):
+            self.setup()
+            self.reqType = 'reqContractDetails'
+            self.param['security'] = security
+
+    class calculateImpliedVolatility(reqDataBase):
+        def __init__(self, security, optionPrice, underPrice):
+            self.setup()
+            self.reqType = 'calculateImpliedVolatility'
+            self.param['security'] = security
+            self.param['optionPrice'] = optionPrice
+            self.param['underPrice'] = underPrice
 
 class MachineStateClass(FiniteStateClass):
     def __init__(self):
@@ -697,7 +819,23 @@ class date_rules(object):
         def __init__(self, days_offset=0):
             self.monthDay=days_offset
             self.version='month_end'
-                       
+            
+def request_data(*args):
+    reqList = pd.DataFrame()
+    nextId = 1
+    for ct in args:
+        ct.reqId = nextId
+        nextId += 1
+        newRow = pd.DataFrame({'reqId':ct.reqId, 'status':ct.status, 
+                               'waiver':ct.waiver, 'reqData':ct, 
+                               'reqType':ct.reqType, 'return_result':ct.return_result}, index=[ct.reqId])
+        reqList = reqList.append(newRow)
+    #print (reqList[reqList['reqId']==2])
+    #print (reqList.loc[9].reqData.param['optionPrice'])
+    for loc in reqList.index:
+        print (reqList.loc[loc]['reqData'])
+    print (reqList[reqList['reqType'] == 'reqPositions']['reqId'])
+                  
 if __name__ == '__main__':
     #a=create_order('BUY',1000,TrailStopLimitOrder(stop_price=1.23, trailing_percent=0.01, limit_offset=0.001))
     #a=create_order('BUY',1000, MarketOrder())    
@@ -722,4 +860,23 @@ if __name__ == '__main__':
     #print (a.__dict__)
     
     #######
-    print (search_security_in_file('STK', 'XIV', 'exchange'))
+    #print (search_security_in_file('STK', 'XIV', 'exchange'))
+    
+    ######
+    request_data(
+                 ReqData.reqPositions(), 
+                 ReqData.reqAccountUpdates(True, 'test'),
+                 ReqData.reqAccountSummary(), 
+                 ReqData.reqIds(),
+                 ReqData.reqHistoricalData(from_symbol_to_security('SPY'), 
+                                           '1 day', '10 D', dt.datetime.now()),
+                 ReqData.reqMktData(from_symbol_to_security('SPY')),
+                 ReqData.reqRealTimeBars(from_symbol_to_security('SPY')),                 
+                 ReqData.reqContractDetails(from_symbol_to_security('SPY')),                 
+                 ReqData.calculateImpliedVolatility(from_symbol_to_security('SPY'), 99.9, 11.1),                 
+                 ReqData.reqAllOpenOrders(),
+                 ReqData.cancelMktData(1),
+                 ReqData.reqCurrentTime())
+    #print reqPositions().__dict__
+    #print reqAccountUpdates(True, 'test').__dict__
+    c = ReqData.reqPositions()

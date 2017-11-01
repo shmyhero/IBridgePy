@@ -15,15 +15,24 @@ If you have any questions, please send email to IBridgePy@gmail.com
 '''
 
 def initialize(context):
-    pass
+    context.sec1 = symbol('SPY')
+    context.secList = symbols('AAPL', 'GOOG')
 
 def handle_data(context, data):
-    request_data(historyData=[(symbol('SPY'), '1 min', '1 D'),
-                              (symbol('AAPL'), '1 day', '10 D')  ])
-    print ('Historical Data of SPY')
-    print (data.data[symbol('SPY')].hist['1 min'].tail())
-    print ('Historical Data of AAPL')
-    print (data.data[symbol('AAPL')].hist['1 day'].tail())
+    # Method 1 IBridgePy function request_historical_data(security, barSize, goBack)
+    # Users have more controls on this function.
+    # http://www.ibridgepy.com/ibridgepy-documentation/#request_historical_data
+    print ('Historical Data of %s' %(str(context.sec1,),) )
+    print (request_historical_data(context.sec1, '1 day', '10 D'))
+    
+    # Method 2 Same as Quantopian's function
+    #http://www.ibridgepy.com/ibridgepy-documentation/#datahistory_8212_similar_as_datahistory_at_Quantopian
+    # data.history(security, fields, bar_count, frequency)
+    context.tmp = data.history(context.secList, ['open','high', 'low', 'close'], 10, '1d')
+    for i in range(len(context.secList)):
+        print ('Historical Data CLOSE of %s' %(str(context.secList[i],),) )
+        print (context.tmp['close'][context.secList[i]])   
+
     end()
 
           

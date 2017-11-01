@@ -6,10 +6,14 @@ Created on Wed Apr 06 15:29:18 2016
 """
 
 log = trader.log
+record = trader.userLog.record
 get_datetime=trader.get_datetime
 order=trader.order
 order_target=trader.order_target
 order_percent=trader.order_percent
+order_value = trader.order_value
+order_target_percent = trader.order_target_percent
+order_target_value = trader.order_target_value
 cancel_order=trader.cancel_order
 cancel_all_orders=trader.cancel_all_orders
 roundToMinTick=trader.roundToMinTick
@@ -38,4 +42,5 @@ request_historical_data=trader.request_historical_data
 get_order=trader.get_order
 get_open_orders=trader.get_open_orders
 get_option_greeks=trader.get_option_greeks
+get_contract_details=trader.get_contract_details
 end=trader.end

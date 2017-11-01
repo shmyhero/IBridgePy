@@ -97,7 +97,7 @@ class MarketManager(object):
                 timeNow = self.aTrader.get_datetime()
                 #print (__name__, timeNow, self.aTrader.stime_previous)
                 if timeNow.day != self.aTrader.stime_previous.day:
-                    self.check_date_rules(timeNow.date())
+                    self.aTrader.check_date_rules(timeNow.date())
         
                 self.aTrader.processMessages()
                 if self.checkConnectivityFlag:

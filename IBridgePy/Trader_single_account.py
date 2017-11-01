@@ -61,9 +61,8 @@ class Trader(Trader):
         '''
         self.log.debug(__name__ + '::accountDownloadEnd: ' + str(accountCode))
         if self.validateAccountCode(accountCode):
-            ct=self.search_in_end_check_list(reqType='accountDownload', allowToFail=True)
-            if ct!=None:
-                self.end_check_list[ct].status='Done'
+            reqId = self.end_check_list[self.end_check_list['reqType'] == 'reqAccountUpdates']['reqId']
+            self.end_check_list.loc[reqId, 'status'] = 'Done'
                 
     def accountSummary(self, reqId, accountCode, tag, value, currency):
         self.log.notset(__name__ + '::accountSummary:' + str(reqId) + str(accountCode) + str(tag) + 
@@ -79,8 +78,8 @@ class Trader(Trader):
        
     def accountSummaryEnd(self, reqId):
         self.log.debug(__name__+'::accountSummaryEnd: '+str(reqId))
-        ct=self.search_in_end_check_list(reqType='reqAccountSummary', reqId=reqId)
-        self.end_check_list[ct].status='Done'
+        reqId = self.end_check_list[self.end_check_list['reqType'] == 'reqAccountSummary']['reqId']
+        self.end_check_list.loc[reqId, 'status'] = 'Done'
         
     def position(self, accountCode, contract, position, price):
         """
@@ -89,13 +88,20 @@ class Trader(Trader):
         """
         self.log.debug(__name__+'::position: '+accountCode
             +' '+self._print_contract(contract) +','+ str(position) + ', ' + str(price))     
-        if self.validateAccountCode(accountCode):
-            security=from_contract_to_security(contract)
-            adj_security=search_security_in_Qdata(self.qData, security, self.logLevel)
-            securityFound=self.search_security_in_positions(adj_security, accountCode)
-            self.PORTFOLIO.positions[securityFound].amount=position
-            self.PORTFOLIO.positions[securityFound].cost_basis=price       
-            self.PORTFOLIO.positions[securityFound].accountCode=accountCode
+        self.validateAccountCode(accountCode)
+        security=from_contract_to_security(contract)
+        adj_security=search_security_in_Qdata(self.qData, security, self.logLevel)
+
+        if (not self.PORTFOLIO.positions) or (adj_security not in self.PORTFOLIO.positions):   
+            # a_security is not in positions,  add it in it               
+            self.PORTFOLIO.positions[adj_security] = PositionClass()
+
+        if position:
+            self.PORTFOLIO.positions[adj_security].amount = position
+            self.PORTFOLIO.positions[adj_security].cost_basis = price       
+            self.PORTFOLIO.positions[adj_security].accountCode = accountCode
+        else:
+            del self.PORTFOLIO.positions[adj_security]
 
     def orderStatus(self,orderId, status, filled, remaining, avgFillPrice, permId, parentId, lastFillPrice, clientId, whyHeld):
         """
@@ -113,7 +119,7 @@ class Trader(Trader):
         self.PORTFOLIO.orderStatusBook[orderId].status=status
         self.PORTFOLIO.orderStatusBook[orderId].avgFillPrice=avgFillPrice
         if (self.PORTFOLIO.orderStatusBook[orderId].parentOrderId 
-        is not None and status == 'Filled'):
+                is not None and status == 'Filled'):
             if (self.PORTFOLIO.orderStatusBook[orderId].stop is not None):
                 self.PORTFOLIO.orderStatusBook[
                 self.PORTFOLIO.orderStatusBook[orderId].parentOrderId].stop_reached = True
@@ -230,22 +236,46 @@ class Trader(Trader):
     def order_target(self, security, amount, style=MarketOrder(),orderRef='',
                      accountCode='default'):
         self.log.notset(__name__ + '::order_target') 
-        hold=self.count_positions(security,accountCode=accountCode) 
-        if amount!=hold:
+        hold = self.count_positions(security,accountCode=accountCode) 
+        if amount != hold:
             return self.order(security, amount=amount-hold, style=style,
                               orderRef=orderRef, accountCode=accountCode)
         else:
             self.log.debug(__name__+'::order_target: %s No action is needed' %(str(security),))
             return 0
+
+    def order_value(self, security, value, style=MarketOrder(), orderRef='',
+                     accountCode='default'):
+        self.log.notset(__name__ + '::order_value') 
+        targetShare = int(value / self.show_real_time_price(security, 'ask_price'))
+        return self.order(security, amount=targetShare, style=style,
+                          orderRef=orderRef, accountCode=accountCode)
             
-    def order_percent(self, security, amount, style=MarketOrder(),orderRef='',
+    def order_percent(self, security, percent, style=MarketOrder(),orderRef='',
                      accountCode='default'):
         self.log.notset(__name__ + '::order_percent') 
-        if amount > 1.0 or amount < -1.0:
-            self.log.error(__name__+'::order_percent: EXIT, amount=%s [-1.0, 1.0]' %(str(amount),))
+        if percent > 1.0 or percent < -1.0:
+            self.log.error(__name__+'::order_percent: EXIT, percent=%s [-1.0, 1.0]' %(str(percent),))
             exit()
         targetShare = int(self.PORTFOLIO.portfolio_value / self.show_real_time_price(security, 'ask_price'))
-        return self.order(security, amount=int(targetShare * amount), style=style,
+        return self.order(security, amount=int(targetShare * percent), style=style,
+                          orderRef=orderRef, accountCode=accountCode)
+
+    def order_target_percent(self, security, percent, style=MarketOrder(), 
+                             orderRef='', accountCode='default'):
+        self.log.notset(__name__ + '::order_percent') 
+        if percent > 1.0 or percent < -1.0:
+            self.log.error(__name__+'::order_target_percent: EXIT, percent=%s [-1.0, 1.0]' %(str(percent),))
+            exit()
+        targetShare = int(self.PORTFOLIO.portfolio_value / self.show_real_time_price(security, 'ask_price'))
+        return self.order_target(security, amount=int(targetShare * percent), style=style,
+                          orderRef=orderRef, accountCode=accountCode)
+
+    def order_target_value(self, security, value, style=MarketOrder(), 
+                             orderRef='', accountCode='default'):
+        self.log.notset(__name__ + '::order_target_value') 
+        targetShare = int(value / self.show_real_time_price(security, 'ask_price'))
+        return self.order_target(security, amount=targetShare, style=style,
                           orderRef=orderRef, accountCode=accountCode)
 
     def order_target_II(self, security, amount, style=MarketOrder(), accountCode='default'):
@@ -405,7 +435,6 @@ class Trader(Trader):
             self.order_status_monitor(orderId, 'Filled')                
 
     def show_account_info(self, infoName, accountCode='default' ):
-        #self.request_data(accountDownload=self.accountCode)
         accountCode=self.validateAccountCode(accountCode)
         if hasattr(self.PORTFOLIO, infoName):
             tp=getattr(self.PORTFOLIO, infoName)
@@ -476,7 +505,7 @@ class Trader(Trader):
         if sid==None:
             ans={}
             for orderId in self.PORTFOLIO.orderStatusBook:
-                if  self.PORTFOLIO.orderStatusBook[orderId].status not in ['Filled','Cancelled','Inactive']:
+                if  self.PORTFOLIO.orderStatusBook[orderId].status in ['PreSubmitted', 'Submitted']:
                     tp=self.PORTFOLIO.orderStatusBook[orderId].contract
                     security=from_contract_to_security(tp)
                     security=search_security_in_Qdata(self.qData, security, self.logLevel)             
@@ -488,7 +517,7 @@ class Trader(Trader):
         else:
             ans=[]
             for orderId in self.PORTFOLIO.orderStatusBook:
-                if  self.PORTFOLIO.orderStatusBook[orderId].status not in ['Filled','Cancelled','Inactive']:
+                if  self.PORTFOLIO.orderStatusBook[orderId].status in ['PreSubmitted','Submitted']:
                     tp=self.PORTFOLIO.orderStatusBook[orderId].contract
                     security=from_contract_to_security(tp)
                     security=search_security_in_Qdata(self.qData, security, self.logLevel)             
@@ -496,8 +525,16 @@ class Trader(Trader):
                         ans.append(self.PORTFOLIO.orderStatusBook[orderId])
             return ans
 
-    ######### IBridgePy supportive functions       
-    def _build_security_in_positions(self, a_security, accountCode='default'):
+    ######### IBridgePy supportive functions    
+    def build_security_in_positions(self, a_security, accountCode='default'):
+        self.log.notset(__name__+'::build_security_in_positions')  
+        accountCode=self.validateAccountCode(accountCode)
+        if a_security not in self.PORTFOLIO.positions:
+            self.PORTFOLIO.positions[a_security] = PositionClass()
+            self.log.notset(__name__+'::_build_security_in_positions: Empty,\
+            add a new position '+str(a_security))
+   
+    def build_security_in_positions_old(self, a_security, accountCode='default'):
         self.log.notset(__name__+'::_build_security_in_positions')  
         accountCode=self.validateAccountCode(accountCode)
         if self.PORTFOLIO.positions=={}:
@@ -516,17 +553,8 @@ class Trader(Trader):
             add a new position '+str(a_security))
             return
 
-    def build_security_in_positions(self, a_security, accountCode='default'):
-        if accountCode=='default':
-            self._build_security_in_positions(a_security, accountCode)
-        else:
-            if type(self.accountCode)==str:
-                self._build_security_in_positions(a_security, self.accountCode)
-            else:
-                for accountCode in self.accountCode:
-                    self._build_security_in_positions(a_security, accountCode)
                                    
-    def search_security_in_positions(self, a_security, accountCode='default'):
+    def search_security_in_positions_old(self, a_security, accountCode='default'):
         self.log.notset(__name__+'::search_security_in_positions')  
         # if positions is empty, add new security, then return
         accountCode=self.validateAccountCode(accountCode)
@@ -554,7 +582,6 @@ class Trader(Trader):
                 self.log.error(str(found[ct]))
             exit()  
 
- 
     def check_if_any_unfilled_orders(self, verbose=False, accountCode='default'):
         self.log.notset(__name__+'::check_if_any_unfilled_orders')      
         accountCode=self.validateAccountCode(accountCode)
@@ -665,6 +692,13 @@ class Trader(Trader):
         
     def orderId_to_accountcode(self, orderId):
         return self.accountCode
+        
+    def update_last_price_in_positions(self, last_price, security):
+        self.validateAccountCode(self.accountCode)
+        if self.PORTFOLIO.positions and security in self.PORTFOLIO.positions:
+            self.PORTFOLIO.positions[security].last_sale_price = last_price
+
+        
     
        
         

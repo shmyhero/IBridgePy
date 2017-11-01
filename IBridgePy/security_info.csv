@@ -769,6 +769,7 @@ DFRG,"Del Frisco&#39;s Restaurant Group, Inc.",2012,Consumer Services,Restaurant
 DCTH,"Delcath Systems, Inc.",2000,Health Care,Medical/Dental Instruments,NASDAQ,STK,USD,,
 DLIA,dELIA*s Inc.,n/a,Consumer Services,Catalog/Specialty Distribution,NASDAQ,STK,USD,,
 DGAS,"Delta Natural Gas Company, Inc.",1981,Public Utilities,Oil & Gas Production,NASDAQ,STK,USD,,
+DGAZ,,,,,ARCA,STK,USD
 DENN,Denny&#39;s Corporation,n/a,Consumer Services,Restaurants,NASDAQ,STK,USD,,
 XRAY,DENTSPLY International Inc.,1987,Health Care,Medical/Dental Instruments,NASDAQ,STK,USD,,
 DEPO,"Depomed, Inc.",n/a,Health Care,Major Pharmaceuticals,NASDAQ,STK,USD,,
@@ -1439,6 +1440,7 @@ EGRW,iShares MSCI Emerging Markets Growth Index Fund,n/a,n/a,n/a,NASDAQ,STK,USD,
 EEML,iShares MSCI Emerging Markets Latin America Index Fund,n/a,n/a,n/a,NASDAQ,STK,USD,,
 EVAL,iShares MSCI Emerging Markets Value Index Fund,n/a,n/a,n/a,NASDAQ,STK,USD,,
 EUFN,iShares MSCI Europe Financials Sector Index Fund,n/a,n/a,n/a,NASDAQ,STK,USD,,
+EUR,,,,,IDEALPRO,CFD,USD,IDEALPRO
 IEUS,iShares MSCI Europe Small-Cap ETF,n/a,n/a,n/a,NASDAQ,STK,USD,,
 QAT,iShares MSCI Qatar Capped ETF,n/a,n/a,n/a,NASDAQ,STK,USD,,
 UAE,iShares MSCI UAE Capped ETF,n/a,n/a,n/a,NASDAQ,STK,USD,,
@@ -2713,6 +2715,7 @@ UBNK,"United Financial Bancorp, Inc.",n/a,n/a,n/a,NASDAQ,STK,USD,,
 UFCS,"United Fire Group, Inc",n/a,Finance,Property-Casualty Insurers,NASDAQ,STK,USD,,
 UIHC,United Insurance Holdings Corp.,n/a,Finance,Property-Casualty Insurers,NASDAQ,STK,USD,,
 UNFI,"United Natural Foods, Inc.",1996,Consumer Non-Durables,Food Distributors,NASDAQ,STK,USD,,
+UNG,,,,,ARCA,STK,USD
 UNTD,"United Online, Inc.",n/a,Technology,"Computer Software: Programming, Data Processing",NASDAQ,STK,USD,,
 UBFO,United Security Bancshares,n/a,Finance,Major Banks,NASDAQ,STK,USD,,
 USBI,"United Security Bancshares, Inc.",n/a,Finance,Major Banks,NASDAQ,STK,USD,,
@@ -2720,6 +2723,7 @@ USLM,"United States Lime & Minerals, Inc.",n/a,Basic Industries,Mining & Quarryi
 USTR,United Stationers Inc.,1981,Consumer Services,Paper,NASDAQ,STK,USD,,
 UTHR,United Therapeutics Corporation,1999,Health Care,Major Pharmaceuticals,NASDAQ,STK,USD,,
 UG,"United-Guardian, Inc.",n/a,Consumer Non-Durables,Package Goods/Cosmetics,NASDAQ,STK,USD,,
+UGAZ,,,,,ARCA,STK,USD
 UNTY,"Unity Bancorp, Inc.",n/a,Finance,Major Banks,NASDAQ,STK,USD,,
 OLED,Universal Display Corporation,n/a,Capital Goods,Electrical Products,NASDAQ,STK,USD,,
 UEIC,Universal Electronics Inc.,1993,Consumer Non-Durables,Consumer Electronics/Appliances,NASDAQ,STK,USD,,
@@ -3917,6 +3921,7 @@ DTF,"Duff & Phelps Utilities Tax-Free Income, Inc.",1991,n/a,n/a,NYSE,STK,USD,,
 DUC,"Duff & Phelps Utility & Corporate Bond Trust, Inc.",1993,n/a,n/a,NYSE,STK,USD,,
 DUK,Duke Energy Corporation,n/a,Public Utilities,Power Generation,NYSE,STK,USD,,
 DUKH,Duke Energy Corporation,n/a,Public Utilities,Power Generation,NYSE,STK,USD,,
+DUST,,,,,ARCA,STK,USD
 DRE,Duke Realty Corporation,n/a,Consumer Services,Real Estate Investment Trusts,NYSE,STK,USD,,
 DRE^K/CL,Duke Realty Corporation,n/a,n/a,n/a,NYSE,STK,USD,,
 DRE^L/CL,Duke Realty Corporation,n/a,n/a,n/a,NYSE,STK,USD,,
@@ -4210,6 +4215,7 @@ GCV^B,"Gabelli Convertible and Income Securities Fund, Inc. (The)",n/a,n/a,n/a,N
 GDV,Gabelli Dividend,2003,n/a,n/a,NYSE,STK,USD,,
 GDV^A,Gabelli Dividend,n/a,n/a,n/a,NYSE,STK,USD,,
 GDV^D,Gabelli Dividend,n/a,n/a,n/a,NYSE,STK,USD,,
+GDX,,,,,ARCA,STK,USD
 GAB,"Gabelli Equity Trust, Inc. (The)",1986,n/a,n/a,NYSE,STK,USD,,
 GAB^D,"Gabelli Equity Trust, Inc. (The)",n/a,n/a,n/a,NYSE,STK,USD,,
 GAB^G,"Gabelli Equity Trust, Inc. (The)",n/a,n/a,n/a,NYSE,STK,USD,,
@@ -5083,6 +5089,7 @@ NYLD,"NRG Yield, Inc.",2013,Public Utilities,Electric Utilities: Central,NYSE,ST
 DCM,"NTT DOCOMO, Inc",n/a,Technology,Radio And Television Broadcasting And Communications Equipment,NYSE,STK,USD,,
 NUS,"Nu Skin Enterprises, Inc.",1996,Health Care,Other Pharmaceuticals,NYSE,STK,USD,,
 NUE,Nucor Corporation,n/a,Basic Industries,Steel/Iron Ore,NYSE,STK,USD,,
+NUGT,,,,,ARCA,STK,USD
 NS,Nustar Energy L.P.,n/a,Energy,Natural Gas Distribution,NYSE,STK,USD,,
 NSH,"Nustar GP Holdings, LLC",n/a,Energy,Natural Gas Distribution,NYSE,STK,USD,,
 NSS,"NuStar Logistics, L.P.",n/a,Energy,Natural Gas Distribution,NYSE,STK,USD,,
