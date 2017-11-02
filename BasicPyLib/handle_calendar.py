@@ -112,7 +112,9 @@ def count_trading_days(startDay, endDay):
     return ans
 
 def count_trading_days_in_a_month(aDay):
-    tmp=(aDay+MonthEnd(1)).date() # change pd.TimeStampe to dt.date  
+    #tmp=(aDay+MonthEnd(1)).date() # change pd.TimeStampe to dt.date
+    next_month = aDay.replace(day=28) + dt.timedelta(days=4)  # this will never fail
+    tmp = next_month - dt.timedelta(days=next_month.day)
     return count_trading_days(aDay.replace(day=1), tmp )
 
 def count_trading_days_in_a_week(aDay):
