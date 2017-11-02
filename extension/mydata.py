@@ -60,11 +60,19 @@ class MyData(object):
         indexes = map(lambda x: field_dic[x],fields)
         provider = MyData.get_current_data_provider(symbols)
         records = provider.get_current_data(symbols)
-        rows = map(lambda record: map(lambda index: record[index], indexes), records)
-        prefixed_row = map(lambda x,y: [x] + y, symbols, rows )
-        df = pd.DataFrame(prefixed_row, columns=['symbol'] + fields)
-        return df
-
+        if len(symbols) == 1 and len(fields) == 1:
+            return records[0][0]
+        elif len(symbols) > 1 and len(fields) == 1:
+            values = map(lambda x: x[indexes[0]], records)
+            return pd.Series(values, index=symbols)
+        elif len(symbols) == 1 and len(fields) >= 1:
+            values = map(lambda index: records[0][index], indexes)
+            return pd.Series(values, index=fields)
+        else:
+            rows = map(lambda record: map(lambda index: record[index], indexes), records)
+            prefixed_row = map(lambda x,y: [x] + y, symbols, rows )
+            df = pd.DataFrame(prefixed_row, columns=['symbol'] + fields)
+            return df
 
 
 if __name__ == '__main__':
@@ -72,7 +80,8 @@ if __name__ == '__main__':
     #print MyData.history('SPX')
     #print MyData.history(['SPY', 'VIX'], window=252)
     #print MyData.current(['SPY', 'QQQ', 'VIX', 'NDX'], ['price', 'volume'])
-    print MyData.current(['SPY', 'QQQ', 'AAPL'], ['price', 'open', 'high', 'low', 'close', 'volume'])
-    #print MyData.current(['SPY', 'QQQ', 'AAPL', 'NDX'], ['price', 'open', 'high', 'low', 'close', 'volume'])
+    #print MyData.current(['SPY', 'QQQ', 'AAPL'], ['price', 'open', 'high', 'low', 'close', 'volume'])
+    print MyData.current(['SPY', 'QQQ', 'AAPL', 'NDX'], ['price', 'open', 'high', 'low', 'close'])
     #print MyData.current(['DJI'], ['price', 'open', 'high', 'low', 'close', 'volume'])
-    #print MyData.current('DJI', 'price')
+    #print MyData.current(['DJI', 'SPY'], 'price')
+    #print MyData.current('SPY', ['open', 'close', 'high', 'low'])
