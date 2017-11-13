@@ -70,8 +70,7 @@ class MyData(object):
             return pd.Series(values, index=fields)
         else:
             rows = map(lambda record: map(lambda index: record[index], indexes), records)
-            prefixed_row = map(lambda x,y: [x] + y, symbols, rows )
-            df = pd.DataFrame(prefixed_row, columns=['symbol'] + fields)
+            df = pd.DataFrame(rows, columns=fields, index=symbols)
             return df
 
 

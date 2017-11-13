@@ -85,8 +85,11 @@ class TradeTime(object):
         return nydate in half_trade_dates
 
     @staticmethod
-    def is_market_open():
-        now = datetime.datetime.now(tz=pytz.timezone('US/Eastern'))
+    def is_market_open(current_time=None):
+        if current_time:
+            now = current_time
+        else:
+            now = datetime.datetime.now(tz=pytz.timezone('US/Eastern'))
         if TradeTime.is_trade_day(now.date()):
             if TradeTime.is_half_trade_day(now.date()):
                 end_hour = 13
@@ -120,12 +123,22 @@ class TradeTime(object):
 
 
 if __name__ == '__main__':
-    print TradeTime.get_trading_close_holidays(2017)
-    print TradeTime.get_half_trade_dates(2015)
-    print TradeTime.is_trade_day(datetime.date(2017, 12, 25))
-    print TradeTime.is_trade_day(datetime.date(2017, 9, 1))
-    print TradeTime.is_trade_day(datetime.date(2017, 9, 4))
-    print TradeTime.is_half_trade_day(datetime.date(2017, 7, 3))
+    #print TradeTime.get_trading_close_holidays(2017)
+    #print TradeTime.get_half_trade_dates(2015)
+    #print TradeTime.is_trade_day(datetime.date(2017, 12, 25))
+    #print TradeTime.is_trade_day(datetime.date(2017, 9, 1))
+    #print TradeTime.is_trade_day(datetime.date(2017, 9, 4))
+    #print TradeTime.is_half_trade_day(datetime.date(2017, 7, 3))
+    print TradeTime.is_market_open(datetime.datetime(2017, 11, 6, 15, 15, 0))
     print TradeTime.is_market_open()
-    print TradeTime.get_latest_trade_date()
-    print TradeTime.get_from_date_by_window(252)
+
+    t =  datetime.datetime(2017, 11, 6, 15, 15, 0, tzinfo=pytz.timezone('US/Eastern'))
+    print t.astimezone(pytz.timezone('US/Eastern'))
+    print t.astimezone(pytz.utc)
+    print t.astimezone(pytz.timezone('Asia/Shanghai'))
+    print datetime.datetime.now(tz=pytz.timezone('US/Eastern'))
+    print datetime.datetime.now(tz=pytz.utc)
+    print datetime.datetime.now(tz=pytz.timezone('Asia/Shanghai'))
+    #n = datetime.datetime.now(tz=pytz.utc)
+    #print TradeTime.get_latest_trade_date()
+    #print TradeTime.get_from_date_by_window(252)
