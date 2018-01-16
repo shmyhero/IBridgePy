@@ -107,7 +107,7 @@ class TradeTime(object):
     def get_latest_trade_date():
         for i in range(10):
             trade_date = datetime.datetime.today() - datetime.timedelta(days=i+1)
-            if TradeTime.is_trade_day(trade_date):
+            if TradeTime.is_trade_day(trade_date.date()):
                 return trade_date.date()
 
     @staticmethod
